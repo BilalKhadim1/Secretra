@@ -1,0 +1,265 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventPriority {
+  critical
+  high
+  medium
+  low
+}
+
+enum EventStatus {
+  proposed
+  confirmed
+  cancelled
+}
+
+enum TaskPriority {
+  P1
+  P2
+  P3
+  P4
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum InteractionType {
+  call
+  email
+  meeting
+  note
+}
+
+enum DraftStatus {
+  draft
+  sent
+  scheduled
+}
+
+enum PlatformType {
+  web
+  ios
+  android
+}
+
+model User {
+  id               String              @id @default(uuid()) @db.Uuid
+  email            String              @unique
+  password         String?
+  name             String?
+  timezone         String              @default("UTC")
+  digestTime       DateTime?           @db.Time
+  avatarUrl        String?
+  // OAuth
+  googleId         String?             @unique @map("google_id")
+  appleId          String?             @unique @map("apple_id")
+  oauthAccounts    OAuthAccount[]
+  // Features
+  pushSubscriptions PushSubscription[]
+  events           Event[]
+  tasks            Task[]
+  reminders        Reminder[]
+  notes            Note[]
+  contacts         Contact[]
+  emailDrafts      EmailDraft[]
+  emailTemplates   EmailTemplate[]
+
+  createdAt        DateTime            @default(now()) @db.Timestamptz
+  updatedAt        DateTime            @updatedAt @db.Timestamptz
+  deletedAt        DateTime?           @db.Timestamptz
+
+  @@map("users")
+}
+
+model OAuthAccount {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String
+  providerId   String   @map("provider_id")
+  accessToken  String   @map("access_token")
+  refreshToken String?  @map("refresh_token")
+  expiresAt    DateTime? @db.Timestamptz @map("expires_at")
+  createdAt    DateTime @default(now()) @db.Timestamptz @map("created_at")
+
+  @@unique([provider, providerId])
+  @@map("oauth_accounts")
+}
+
+model PushSubscription {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @db.Uuid @map("user_id")
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform  PlatformType
+  endpoint  String
+  keys      Json?
+  deviceId  String?      @map("device_id")
+  createdAt DateTime     @default(now()) @db.Timestamptz @map("created_at")
+
+  @@map("push_subscriptions")
+}
+
+model Event {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @db.Uuid @map("user_id")
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  startAt       DateTime      @db.Timestamptz @map("start_at")
+  endAt         DateTime      @db.Timestamptz @map("end_at")
+  isAllDay      Boolean       @default(false) @map("is_all_day")
+  priority      EventPriority @default(medium)
+  status        EventStatus   @default(confirmed)
+  googleEventId String?       @map("google_event_id")
+  rrule         String?
+  location      String?
+  color         String?
+  tasks         Task[]
+  reminders     Reminder[]
+  createdAt     DateTime      @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt     DateTime      @updatedAt @db.Timestamptz @map("updated_at")
+
+  @@map("events")
+}
+
+model Contact {
+  id              String               @id @default(uuid()) @db.Uuid
+  userId          String               @db.Uuid @map("user_id")
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  emails          String[]             @default([])
+  phones          String[]             @default([])
+  company         String?
+  role            String?
+  tags            String[]             @default([])
+  avatarUrl       String?              @map("avatar_url")
+  googleContactId String?              @map("google_contact_id")
+  // FTS search vector (handled by SQL direct)
+  // searchVector Unsupported("tsvector")? 
+  tasks           Task[]
+  notes           Note[]
+  interactions    ContactInteraction[]
+  emailDrafts     EmailDraft[]
+
+  createdAt       DateTime             @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt       DateTime             @updatedAt @db.Timestamptz @map("updated_at")
+  deletedAt       DateTime?            @db.Timestamptz @map("deleted_at")
+
+  @@map("contacts")
+}
+
+model Task {
+  id          String       @id @default(uuid()) @db.Uuid
+  userId      String       @db.Uuid @map("user_id")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  priority    TaskPriority @default(P3)
+  status      TaskStatus   @default(todo)
+  dueDate     DateTime?    @db.Timestamptz @map("due_date")
+  sortOrder   String?      @map("sort_order")
+  eventId     String?      @db.Uuid @map("event_id")
+  event       Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  contactId   String?      @db.Uuid @map("contact_id")
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  reminders   Reminder[]
+
+  createdAt   DateTime     @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt   DateTime     @updatedAt @db.Timestamptz @map("updated_at")
+  deletedAt   DateTime?    @db.Timestamptz @map("deleted_at")
+
+  @@map("tasks")
+}
+
+model Reminder {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  fireAt    DateTime @db.Timestamptz @map("fire_at")
+  bullJobId String?  @map("bull_job_id")
+  sent      Boolean  @default(false)
+  taskId    String?  @db.Uuid @map("task_id")
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  eventId   String?  @db.Uuid @map("event_id")
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz @map("created_at")
+
+  @@map("reminders")
+}
+
+model Note {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @db.Uuid @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String?
+  content      Json
+  plainText    String?   @map("plain_text")
+  aiSummary    String?   @map("ai_summary")
+  contactId    String?   @db.Uuid @map("contact_id")
+  contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  // FTS search vector (handled by SQL direct)
+  createdAt    DateTime  @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt    DateTime  @updatedAt @db.Timestamptz @map("updated_at")
+  deletedAt    DateTime? @db.Timestamptz @map("deleted_at")
+
+  @@map("notes")
+}
+
+model ContactInteraction {
+  id               String          @id @default(uuid()) @db.Uuid
+  contactId        String          @db.Uuid @map("contact_id")
+  contact          Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type             InteractionType
+  summary          String?
+  happenedAt       DateTime        @default(now()) @db.Timestamptz @map("happened_at")
+  linkedEntityId   String?         @db.Uuid @map("linked_entity_id")
+  linkedEntityType String?         @map("linked_entity_type")
+  createdAt        DateTime        @default(now()) @db.Timestamptz @map("created_at")
+
+  @@map("contact_interactions")
+}
+
+model EmailDraft {
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @db.Uuid @map("user_id")
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contactId       String?     @db.Uuid @map("contact_id")
+  contact         Contact?    @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  subject         String?
+  body            String?
+  status          DraftStatus @default(draft)
+  sendAt          DateTime?   @db.Timestamptz @map("send_at")
+  gmailMessageId  String?     @map("gmail_message_id")
+  createdAt       DateTime    @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt       DateTime    @updatedAt @db.Timestamptz @map("updated_at")
+
+  @@map("email_drafts")
+}
+
+model EmailTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @db.Uuid @map("user_id")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  subjectTemplate String?  @map("subject_template")
+  bodyTemplate    String?  @map("body_template")
+  variables       String[] @default([])
+  createdAt       DateTime @default(now()) @db.Timestamptz @map("created_at")
+  updatedAt       DateTime @updatedAt @db.Timestamptz @map("updated_at")
+
+  @@map("email_templates")
+}

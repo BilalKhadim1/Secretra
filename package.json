@@ -1,0 +1,26 @@
+{
+  "name": "personal-secretary",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.2",
+  "description": "Intelligent Digital Assistant Monorepo",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:mobile\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:mobile": "cd mobile && npm run dev",
+    "lint": "turbo lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "workspaces": [
+    "mobile",
+    "server",
+    "shared"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "kill-port": "^2.0.1",
+    "prettier": "latest",
+    "turbo": "latest"
+  }
+}
