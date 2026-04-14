@@ -58,10 +58,14 @@ const THEME_BLUE = '#111827';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { data: user, isLoading } = trpc.profile.me.useQuery(undefined, {
+  const { data: user, isLoading: isUserLoading } = trpc.profile.me.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: tasks, isLoading: isTasksLoading } = trpc.task.getTasks.useQuery();
+
+  const isLoading = isUserLoading || isTasksLoading;
 
   if (isLoading && !user) {
     return (
@@ -71,8 +75,11 @@ export default function DashboardScreen() {
     );
   }
 
+  const activeTasksCount = tasks?.filter((t: any) => t.status !== 'done').length || 0;
   const initials = (user?.name || 'Sarah Johnson')
     .split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
@@ -110,7 +117,7 @@ export default function DashboardScreen() {
             </View>
 
             <View style={{ flexDirection: 'row' }}>
-              {['Mon, April 13', '8 tasks today'].map((label, i, arr) => (
+              {[today, `${activeTasksCount} tasks pending`].map((label, i, arr) => (
                 <View key={label} className="flex-row items-center bg-white/5 border border-white/10" style={{
                   paddingHorizontal: 16, paddingVertical: 8,
                   borderRadius: 14, marginRight: i < arr.length - 1 ? 10 : 0
@@ -144,9 +151,9 @@ export default function DashboardScreen() {
             {/* Stats Grid - Optimization for Mobile Height */}
             <View style={{ flexDirection: 'row', marginBottom: 20, width: '100%' }}>
               {[
-                { num: '5',  label: 'Tasks',  Icon: IconCheck,    color: '#e87a6e', bg: '#fff0ee', badge: '+2' },
-                { num: '2',  label: 'Events', Icon: IconCalendar, color: '#6366f1', bg: '#eef0ff', badge: null },
-                { num: '3',  label: 'Drafts', Icon: IconMail,     color: '#10b981', bg: '#ecfdf5', badge: null },
+                { num: String(activeTasksCount),  label: 'Tasks',  Icon: IconCheck,    color: '#e87a6e', bg: '#fff0ee', badge: activeTasksCount > 0 ? `+${activeTasksCount}` : null },
+                { num: '0',  label: 'Events', Icon: IconCalendar, color: '#6366f1', bg: '#eef0ff', badge: null },
+                { num: '0',  label: 'Drafts', Icon: IconMail,     color: '#10b981', bg: '#ecfdf5', badge: null },
               ].map((s, i, arr) => (
                 <View key={s.label} className="bg-white rounded-[22px]" style={{
                   flex: 1,

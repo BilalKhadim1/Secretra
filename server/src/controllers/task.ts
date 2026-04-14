@@ -30,6 +30,7 @@ export const taskRouter = router({
       description: z.string().optional(),
       priority: z.nativeEnum(TaskPriority).default(TaskPriority.P3),
       status: z.nativeEnum(TaskStatus).default(TaskStatus.todo),
+      startDate: z.string().datetime().optional(),
       dueDate: z.string().datetime().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -47,6 +48,7 @@ export const taskRouter = router({
         data: {
           ...input,
           userId: ctx.user.id,
+          startDate: input.startDate ? new Date(input.startDate) : null,
           dueDate: input.dueDate ? new Date(input.dueDate) : null,
           sortOrder: nextOrder,
         },
@@ -61,6 +63,7 @@ export const taskRouter = router({
       description: z.string().optional(),
       priority: z.nativeEnum(TaskPriority).optional(),
       status: z.nativeEnum(TaskStatus).optional(),
+      startDate: z.string().datetime().nullable().optional(),
       dueDate: z.string().datetime().nullable().optional(),
       sortOrder: z.string().optional(),
     }))
@@ -71,6 +74,7 @@ export const taskRouter = router({
         where: { id, userId: ctx.user.id },
         data: {
           ...data,
+          startDate: data.startDate ? new Date(data.startDate) : (data.startDate === null ? null : undefined),
           dueDate: data.dueDate ? new Date(data.dueDate) : (data.dueDate === null ? null : undefined),
         },
       });

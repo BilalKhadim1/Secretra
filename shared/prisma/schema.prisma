@@ -169,6 +169,7 @@ model Task {
   description String?
   priority    TaskPriority @default(P3)
   status      TaskStatus   @default(todo)
+  startDate   DateTime?    @db.Timestamptz @map("start_date")
   dueDate     DateTime?    @db.Timestamptz @map("due_date")
   sortOrder   String?      @map("sort_order")
   eventId     String?      @db.Uuid @map("event_id")
@@ -211,6 +212,10 @@ model Note {
   aiSummary    String?   @map("ai_summary")
   contactId    String?   @db.Uuid @map("contact_id")
   contact      Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  tags         String[]  @default([])
+  folder       String?
+  isPinned     Boolean   @default(false) @map("is_pinned")
+  isArchived   Boolean   @default(false) @map("is_archived")
   // FTS search vector (handled by SQL direct)
   createdAt    DateTime  @default(now()) @db.Timestamptz @map("created_at")
   updatedAt    DateTime  @updatedAt @db.Timestamptz @map("updated_at")

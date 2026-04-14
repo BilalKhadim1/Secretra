@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Secretra",
-    "slug": "personal-secretary",
+    "slug": "personal-secretary-hr",
     "version": "1.0.0",
     "scheme": "personal-secretary",
     "web": {
@@ -9,7 +9,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
@@ -25,13 +26,22 @@
               "scheme": "personal-secretary"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
     "ios": {
       "bundleIdentifier": "com.bilal.secretra",
       "supportsTablet": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0ff93509-c749-4589-b32f-739fb1ea105a"
+      }
     }
   }
 }
