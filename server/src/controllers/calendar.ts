@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { PrismaClient, EventPriority, EventStatus } from '@ps/db';
+import { PrismaClient, EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
 
 const prisma = new PrismaClient();
 
@@ -10,6 +10,7 @@ const eventInputSchema = z.object({
   description: z.string().optional(),
   location: z.string().optional(),
   groupId: z.string().uuid().optional(),
+  attendeeIds: z.array(z.string().uuid()).optional(), // New field
   eventType: z.string().default('event'),
   startAt: z.string().datetime(),
   endAt: z.string().datetime(),
@@ -22,7 +23,8 @@ const eventInputSchema = z.object({
 const eventUpdateSchema = z.object({
   id: z.string().uuid(),
   groupId: z.string().uuid().optional(),
-  eventType: z.string().default('event'), // 'meeting' | 'event' | 'reminder' | 'task' | 'call' | 'lunch' | 'travel' | string
+  attendeeIds: z.array(z.string().uuid()).optional(), // New field
+  eventType: z.string().default('event'),
   title: z.string().optional(),
   description: z.string().optional(),
   location: z.string().optional(),
@@ -34,7 +36,53 @@ const eventUpdateSchema = z.object({
   googleEventId: z.string().optional(),
 });
 
+const dashboardOverviewSchema = z.object({
+  todayCount: z.number(),
+  nextEvent: z.any().nullable(), // Simplifying for now to ensure type propagation
+});
+
 export const calendarRouter = router({
+  // Get dashboard overview stats
+  getDashboardOverview: protectedProcedure
+    .output(dashboardOverviewSchema)
+    .query(async ({ ctx }) => {
+      const now = new Date();
+      const endOfToday = new Date(now);
+      endOfToday.setHours(23, 59, 59, 999);
+
+      const [todayEvents, nextEvents] = await Promise.all([
+        prisma.event.findMany({
+          where: {
+            OR: [
+              { userId: ctx.user.id },
+              { attendees: { some: { id: ctx.user.id } } },
+            ],
+            startAt: { gte: now, lte: endOfToday },
+          } as any,
+        }),
+        prisma.event.findMany({
+          where: {
+            OR: [
+              { userId: ctx.user.id },
+              { attendees: { some: { id: ctx.user.id } } },
+            ],
+            startAt: { gt: now },
+          } as any,
+          orderBy: { startAt: 'asc' },
+          take: 1,
+          include: { 
+            group: { select: { name: true } },
+            attendees: { select: { id: true, name: true, avatarUrl: true } },
+          },
+        }),
+      ]);
+
+      return {
+        todayCount: todayEvents.length,
+        nextEvent: (nextEvents[0] as any) || null,
+      };
+    }),
+
   // Get all events for the current user
   getEvents: protectedProcedure
     .input(z.object({
@@ -45,18 +93,22 @@ export const calendarRouter = router({
     .query(async ({ ctx, input }) => {
       return prisma.event.findMany({
         where: {
-          userId: ctx.user.id,
-          ...(input?.groupId ? { groupId: input.groupId } : {}),
+          OR: [
+            { userId: ctx.user.id },
+            { groupId: input?.groupId },
+            { attendees: { some: { id: ctx.user.id } } }, // Also see events I'm attending
+          ],
           ...(input?.startDate || input?.endDate ? {
             startAt: {
               ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
               ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
             }
           } : {}),
-        },
+        } as any,
         orderBy: { startAt: 'asc' },
         include: {
           group: true,
+          ...({ attendees: { select: { id: true, name: true, avatarUrl: true } } } as any),
         },
       });
     }),
@@ -90,47 +142,74 @@ export const calendarRouter = router({
         throw new Error('Access denied: Both users must be in the same group');
       }
 
-      // Get the member's events
-      return prisma.event.findMany({
+      // Get the member's events (where they are owner OR attendee)
+      const events = await prisma.event.findMany({
         where: {
-          userId: input.memberId,
+          OR: [
+            { userId: input.memberId },
+            { attendees: { some: { id: input.memberId } } },
+          ],
           ...(input?.startDate || input?.endDate ? {
             startAt: {
               ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
               ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
             }
           } : {}),
-        },
+        } as any,
         orderBy: { startAt: 'asc' },
         include: {
           group: true,
         },
       });
+
+      // Privacy: Redact title if event belongs to a different group
+      return events.map(e => ({
+        ...e,
+        title: e.groupId === input.groupId ? e.title : 'Busy (Private Event)',
+        location: e.groupId === input.groupId ? e.location : undefined,
+      }));
     }),
 
   // Create a new event
   createEvent: protectedProcedure
     .input(eventInputSchema)
     .mutation(async ({ ctx, input }) => {
-      const { startAt, endAt, groupId, ...rest } = input;
+      const { startAt, endAt, groupId, attendeeIds, ...rest } = input;
       const start = new Date(startAt);
       const end = new Date(endAt);
 
-      const conflictWhere = {
-        userId: ctx.user.id,
-        ...(groupId ? { groupId } : {}),
-        AND: [
-          { startAt: { lt: end } },
-          { endAt: { gt: start } },
-        ],
-      };
+      // 🚨 TARGETED CONFLICT DETECTION 🚨
+      // We check for the owner AND specified attendees
+      const targetUserIds = [ctx.user.id, ...(attendeeIds || [])];
 
-      const conflictingEvent = await prisma.event.findFirst({
-        where: conflictWhere,
+      const conflictingEvents = await prisma.event.findMany({
+        where: {
+          OR: [
+            { userId: { in: targetUserIds } },
+            { attendees: { some: { id: { in: targetUserIds } } } },
+          ],
+          AND: [
+            { startAt: { lt: end } },
+            { endAt: { gt: start } },
+          ],
+        } as any,
+        include: { user: { select: { name: true } } } as any,
       });
 
-      if (conflictingEvent) {
-        throw new Error('Event time conflicts with an existing booking. Please choose a different time.');
+      if (conflictingEvents.length > 0) {
+        const busyNames = [...new Set(conflictingEvents.map((e: any) => 
+          e.userId === ctx.user.id ? 'You' : (e.user?.name || 'a participant')
+        ))];
+        // Move "You" to the front if it exists
+        if (busyNames.includes('You')) {
+          const idx = busyNames.indexOf('You');
+          busyNames.splice(idx, 1);
+          busyNames.unshift('You');
+        }
+        const namesStr = busyNames.length > 1 
+          ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
+          : busyNames[0];
+        throw new Error(`Conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} already busy during this time.`);
       }
 
       return prisma.event.create({
@@ -140,7 +219,10 @@ export const calendarRouter = router({
           groupId,
           startAt: start,
           endAt: end,
-        },
+          attendees: attendeeIds?.length
+            ? { connect: attendeeIds.map((id) => ({ id })) }
+            : undefined,
+        } as any,
       });
     }),
 
@@ -148,11 +230,11 @@ export const calendarRouter = router({
   updateEvent: protectedProcedure
     .input(eventUpdateSchema)
     .mutation(async ({ ctx, input }) => {
-      const { id, startAt, endAt, groupId, ...data } = input;
+      const { id, startAt, endAt, groupId, attendeeIds, ...data } = input;
 
-      // Ensure the event belongs to the user
       const existing = await prisma.event.findFirst({
-        where: { id, userId: ctx.user.id }
+        where: { id, userId: ctx.user.id },
+        include: { attendees: { select: { id: true } } },
       });
 
       if (!existing) {
@@ -161,24 +243,40 @@ export const calendarRouter = router({
 
       const start = startAt ? new Date(startAt) : existing.startAt;
       const end = endAt ? new Date(endAt) : existing.endAt;
-      const targetGroupId = groupId ?? existing.groupId;
 
-      const conflictWhere = {
-        userId: ctx.user.id,
-        ...(targetGroupId ? { groupId: targetGroupId } : {}),
-        AND: [
-          { startAt: { lt: end } },
-          { endAt: { gt: start } },
-          { NOT: { id } },
-        ],
-      };
+      // Conflict check for owner + new attendee list
+      const targetUserIds = [ctx.user.id, ...(attendeeIds || [])];
 
-      const conflictingEvent = await prisma.event.findFirst({
-        where: conflictWhere,
+      const conflictingEvents = await prisma.event.findMany({
+        where: {
+          AND: [
+            {
+              OR: [
+                { userId: { in: targetUserIds } },
+                { attendees: { some: { id: { in: targetUserIds } } } },
+              ],
+            },
+            { startAt: { lt: end } },
+            { endAt: { gt: start } },
+            { NOT: { id } },
+          ],
+        } as any,
+        include: { user: { select: { name: true } } } as any,
       });
 
-      if (conflictingEvent) {
-        throw new Error('Updated event time conflicts with an existing booking. Please choose a different time.');
+      if (conflictingEvents.length > 0) {
+        const busyNames = [...new Set(conflictingEvents.map((e: any) => 
+          e.userId === ctx.user.id ? 'You' : (e.user?.name || 'a participant')
+        ))];
+        if (busyNames.includes('You')) {
+          const idx = busyNames.indexOf('You');
+          busyNames.splice(idx, 1);
+          busyNames.unshift('You');
+        }
+        const namesStr = busyNames.length > 1 
+          ? busyNames.slice(0, -1).join(', ') + ' & ' + busyNames.slice(-1)
+          : busyNames[0];
+        throw new Error(`Update conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy during this time.`);
       }
 
       return prisma.event.update({
@@ -188,7 +286,10 @@ export const calendarRouter = router({
           groupId,
           ...(startAt ? { startAt: start } : {}),
           ...(endAt ? { endAt: end } : {}),
-        },
+          attendees: attendeeIds
+            ? { set: attendeeIds.map((aid) => ({ id: aid })) }
+            : undefined,
+        } as any,
       });
     }),
 
@@ -201,6 +302,68 @@ export const calendarRouter = router({
           id: input.id,
           userId: ctx.user.id,
         },
+      });
+    }),
+
+  // Check availability for all members of a group within a time range
+  getTeamAvailability: protectedProcedure
+    .input(z.object({
+      groupId: z.string().uuid(),
+      startDate: z.string().datetime(),
+      endDate: z.string().datetime(),
+    }))
+    .query(async ({ input }) => {
+      const { groupId, startDate, endDate } = input;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      const members = await prisma.groupMember.findMany({
+        where: { groupId, status: GroupMemberStatus.accepted },
+        include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+
+      const memberIds = members
+        .map((m) => m.userId)
+        .filter((id): id is string => id !== null);
+
+      const events = await prisma.event.findMany({
+        where: {
+          OR: [
+            { userId: { in: memberIds } },
+            { attendees: { some: { id: { in: memberIds } } } },
+          ],
+          AND: [
+            { startAt: { lt: end } },
+            { endAt: { gt: start } },
+          ],
+        } as any,
+        select: {
+          userId: true,
+          title: true,
+          startAt: true,
+          endAt: true,
+          groupId: true,
+          attendees: { select: { id: true } },
+        },
+      });
+
+      return members.map((member) => {
+        const mId = member.user?.id || member.userId;
+        const memberEvents = events
+          .filter((e: any) => e.userId === mId || e.attendees?.some((a: any) => a.id === mId))
+          .map(e => ({
+            ...e,
+            // Privacy: Redact title if event belongs to a different group
+            title: e.groupId === groupId ? e.title : 'Busy (Private Event)',
+          }));
+
+        return {
+          userId: member.user?.id,
+          name: member.user?.name,
+          avatarUrl: member.user?.avatarUrl,
+          isBusy: memberEvents.length > 0,
+          conflictingEvents: memberEvents,
+        };
       });
     }),
 });

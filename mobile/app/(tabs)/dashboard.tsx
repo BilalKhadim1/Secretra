@@ -32,12 +32,6 @@ const IconMail = ({ color = '#10b981', size = 16 }) => (
   </Svg>
 );
 
-const IconBolt = ({ color = 'white', size = 20 }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
-
 const IconUsers = ({ color = 'white', size = 24 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -54,105 +48,82 @@ const IconBell = ({ color = 'white', size = 20 }) => (
   </Svg>
 );
 
+const IconChevron = ({ color = '#9ca3af', size = 16 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const IconPlus = ({ color = '#fff', size = 14 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
+  </Svg>
+);
+
 const LOG_ITEMS = [
-  { id: 1, text: 'Scheduled email to HR',      time: '2 hours ago',          Icon: IconMail,     iconColor: '#e87a6e', bg: '#fff0ee' },
-  { id: 2, text: 'Meeting added: Design Sync',  time: 'Yesterday · 4:12 PM',  Icon: IconCalendar, iconColor: '#6366f1', bg: '#eef0ff' },
-  { id: 3, text: 'Secretarial review finished', time: 'Yesterday · 1:45 PM',  Icon: IconCheck,    iconColor: '#10b981', bg: '#ecfdf5' },
+  { id: 1, text: 'Scheduled email to HR', time: '2 hours ago', Icon: IconMail, iconColor: '#e87a6e', bg: '#fff0ee' },
+  { id: 2, text: 'Meeting added: Design Sync', time: 'Yesterday · 4:12 PM', Icon: IconCalendar, iconColor: '#6366f1', bg: '#eef0ff' },
+  { id: 3, text: 'Secretarial review finished', time: 'Yesterday · 1:45 PM', Icon: IconCheck, iconColor: '#10b981', bg: '#ecfdf5' },
 ];
 
-const THEME_BLUE = '#111827';
+const DARK = '#111827';
+
+// ── Modals ────────────────────────────────────────────────────────────────────
 
 const InvitesModal = ({
-  visible,
-  onClose,
-  invites,
-  onAccept,
-  onReject,
-  loadingInvites,
-  acceptingId,
-  rejectingId,
+  visible, onClose, invites, onAccept, onReject,
+  loadingInvites, acceptingId, rejectingId,
 }: {
-  visible: boolean;
-  onClose: () => void;
+  visible: boolean; onClose: () => void;
   invites: Array<{ groupId: string; groupName: string; groupDescription?: string }>;
-  onAccept: (groupId: string) => void;
-  onReject: (groupId: string) => void;
-  loadingInvites: boolean;
-  acceptingId?: string;
-  rejectingId?: string;
+  onAccept: (groupId: string) => void; onReject: (groupId: string) => void;
+  loadingInvites: boolean; acceptingId?: string; rejectingId?: string;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={onClose}>
-      <Pressable style={{ backgroundColor: '#16161f', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40, maxHeight: '85%' }}>
-        <View style={{ width: 40, height: 4, backgroundColor: '#ffffff20', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
-        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>Department Invites</Text>
-        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>
-          {invites.length === 0 ? 'You have no pending department invites' : `You have ${invites.length} pending invite${invites.length > 1 ? 's' : ''}`}
+    <Pressable style={M.overlay} onPress={onClose}>
+      <Pressable style={M.sheet}>
+        <View style={M.handle} />
+        <Text style={M.sheetTitle}>Department Invites</Text>
+        <Text style={M.sheetSub}>
+          {invites.length === 0
+            ? 'No pending invites'
+            : `${invites.length} pending invite${invites.length > 1 ? 's' : ''}`}
         </Text>
 
         {loadingInvites ? (
-          <View style={{ height: 200, justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ height: 160, justifyContent: 'center', alignItems: 'center' }}>
             <ActivityIndicator color="#e87a6e" size="large" />
           </View>
         ) : invites.length === 0 ? (
-          <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
-            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>No invites to display</Text>
+          <View style={{ height: 80, justifyContent: 'center', alignItems: 'center' }}>
+            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Nothing here yet</Text>
           </View>
         ) : (
-          <ScrollView style={{ maxHeight: 400, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ maxHeight: 380, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
             {invites.map((invite) => (
-              <View
-                key={invite.groupId}
-                style={{
-                  backgroundColor: '#0d1117',
-                  borderWidth: 1,
-                  borderColor: '#2b2f3a',
-                  borderRadius: 14,
-                  padding: 16,
-                  marginBottom: 12,
-                }}
-              >
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', marginBottom: 4 }}>{invite.groupName}</Text>
+              <View key={invite.groupId} style={M.inviteCard}>
+                <Text style={M.inviteName}>{invite.groupName}</Text>
                 {invite.groupDescription && (
-                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginBottom: 12 }}>{invite.groupDescription}</Text>
+                  <Text style={M.inviteDesc}>{invite.groupDescription}</Text>
                 )}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                   <TouchableOpacity
                     onPress={() => onReject(invite.groupId)}
                     disabled={rejectingId === invite.groupId}
-                    style={{
-                      flex: 1,
-                      borderWidth: 1,
-                      borderColor: '#ff6b6b',
-                      borderRadius: 10,
-                      paddingVertical: 10,
-                      alignItems: 'center',
-                      opacity: rejectingId === invite.groupId ? 0.6 : 1,
-                    }}
+                    style={[M.inviteBtnReject, rejectingId === invite.groupId && { opacity: 0.5 }]}
                   >
-                    {rejectingId === invite.groupId ? (
-                      <ActivityIndicator color="#ff6b6b" size="small" />
-                    ) : (
-                      <Text style={{ color: '#ff6b6b', fontWeight: '600', fontSize: 13 }}>Reject</Text>
-                    )}
+                    {rejectingId === invite.groupId
+                      ? <ActivityIndicator color="#ff6b6b" size="small" />
+                      : <Text style={{ color: '#ff6b6b', fontWeight: '600', fontSize: 13 }}>Decline</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => onAccept(invite.groupId)}
                     disabled={acceptingId === invite.groupId}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#06b6d4',
-                      borderRadius: 10,
-                      paddingVertical: 10,
-                      alignItems: 'center',
-                      opacity: acceptingId === invite.groupId ? 0.7 : 1,
-                    }}
+                    style={[M.inviteBtnAccept, acceptingId === invite.groupId && { opacity: 0.6 }]}
                   >
-                    {acceptingId === invite.groupId ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Accept</Text>
-                    )}
+                    {acceptingId === invite.groupId
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Accept</Text>}
                   </TouchableOpacity>
                 </View>
               </View>
@@ -160,10 +131,7 @@ const InvitesModal = ({
           </ScrollView>
         )}
 
-        <TouchableOpacity
-          onPress={onClose}
-          style={{ backgroundColor: '#2b2f3a', borderRadius: 12, paddingVertical: 13, alignItems: 'center' }}
-        >
+        <TouchableOpacity onPress={onClose} style={M.closeBtnDark}>
           <Text style={{ color: '#fff', fontWeight: '600', fontSize: 13 }}>Close</Text>
         </TouchableOpacity>
       </Pressable>
@@ -172,95 +140,116 @@ const InvitesModal = ({
 );
 
 const CreateGroupModal = ({
-  visible,
-  onClose,
-  groupName,
-  setGroupName,
-  groupDesc,
-  setGroupDesc,
-  onCreate,
-  loading,
+  visible, onClose, groupName, setGroupName, groupDesc, setGroupDesc, onCreate, loading,
 }: {
-  visible: boolean;
-  onClose: () => void;
-  groupName: string;
-  setGroupName: (value: string) => void;
-  groupDesc: string;
-  setGroupDesc: (value: string) => void;
-  onCreate: () => void;
-  loading: boolean;
+  visible: boolean; onClose: () => void; groupName: string;
+  setGroupName: (v: string) => void; groupDesc: string;
+  setGroupDesc: (v: string) => void; onCreate: () => void; loading: boolean;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={onClose}>
-      <Pressable style={{ backgroundColor: '#16161f', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 }}>
-        <View style={{ width: 40, height: 4, backgroundColor: '#ffffff20', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
-        <Text style={{ color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 }}>Create Department</Text>
-        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>Add a new group and invite members by email.</Text>
+    <Pressable style={M.overlay} onPress={onClose}>
+      <Pressable style={M.sheet}>
+        <View style={M.handle} />
+        <Text style={M.sheetTitle}>Create Department</Text>
+        <Text style={M.sheetSub}>Group events and invite members by email.</Text>
 
-        <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>Department name</Text>
-        <View style={{ marginBottom: 16, borderRadius: 14, backgroundColor: '#0d1117', borderWidth: 1, borderColor: '#2b2f3a', paddingHorizontal: 14 }}>
+        <Text style={M.fieldLabel}>Name</Text>
+        <View style={M.inputWrap}>
           <TextInput
-            value={groupName}
-            onChangeText={setGroupName}
-            placeholder="Engineering, Sales, HR"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            style={{ color: '#fff', minHeight: 44 }}
+            value={groupName} onChangeText={setGroupName}
+            placeholder="Engineering, Sales, HR…"
+            placeholderTextColor="rgba(255,255,255,0.25)"
+            style={M.textInput}
           />
         </View>
 
-        <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 8 }}>Description</Text>
-        <View style={{ marginBottom: 24, borderRadius: 14, backgroundColor: '#0d1117', borderWidth: 1, borderColor: '#2b2f3a', paddingHorizontal: 14, paddingVertical: 12 }}>
+        <Text style={[M.fieldLabel, { marginTop: 14 }]}>Description</Text>
+        <View style={[M.inputWrap, { paddingVertical: 12, marginBottom: 24 }]}>
           <TextInput
-            value={groupDesc}
-            onChangeText={setGroupDesc}
+            value={groupDesc} onChangeText={setGroupDesc}
             placeholder="Optional department purpose"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            multiline
-            style={{ color: '#fff', minHeight: 70 }}
+            placeholderTextColor="rgba(255,255,255,0.25)"
+            multiline style={[M.textInput, { minHeight: 60 }]}
           />
         </View>
 
         <TouchableOpacity
-          onPress={onCreate}
-          disabled={loading}
-          style={{ backgroundColor: '#06b6d4', borderRadius: 16, paddingVertical: 14, alignItems: 'center', opacity: loading ? 0.7 : 1 }}
+          onPress={onCreate} disabled={loading || !groupName.trim()}
+          style={[M.createBtn, (loading || !groupName.trim()) && { opacity: 0.5 }]}
         >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Create Department</Text>}
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Create Department</Text>}
         </TouchableOpacity>
       </Pressable>
     </Pressable>
   </Modal>
 );
 
+const M = {
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' as const },
+  sheet: {
+    backgroundColor: '#16161f', borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 44,
+  },
+  handle: {
+    width: 36, height: 4, backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 2, alignSelf: 'center' as const, marginBottom: 20,
+  },
+  sheetTitle: { color: '#fff', fontSize: 18, fontWeight: '700' as const, marginBottom: 4 },
+  sheetSub: { color: 'rgba(255,255,255,0.4)', fontSize: 13, marginBottom: 22 },
+  fieldLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700' as const, letterSpacing: 0.6, marginBottom: 8 },
+  inputWrap: {
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 13, paddingHorizontal: 14, marginBottom: 4,
+  },
+  textInput: { color: '#fff', minHeight: 44, fontSize: 14 },
+  inviteCard: {
+    backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 14,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 14, marginBottom: 10,
+  },
+  inviteName: { color: '#fff', fontSize: 14, fontWeight: '700' as const },
+  inviteDesc: { color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 3 },
+  inviteBtnReject: {
+    flex: 1, borderWidth: 1, borderColor: 'rgba(255,107,107,0.5)',
+    borderRadius: 10, paddingVertical: 9, alignItems: 'center' as const,
+  },
+  inviteBtnAccept: {
+    flex: 1, backgroundColor: '#06b6d4',
+    borderRadius: 10, paddingVertical: 9, alignItems: 'center' as const,
+  },
+  closeBtnDark: {
+    backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 12,
+    paddingVertical: 13, alignItems: 'center' as const, marginTop: 4,
+  },
+  createBtn: {
+    backgroundColor: '#06b6d4', borderRadius: 14, paddingVertical: 14, alignItems: 'center' as const,
+  },
+};
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
 export default function DashboardScreen() {
   const router = useRouter();
-  const { data: user, isLoading: isUserLoading } = trpc.profile.me.useQuery(undefined, {
-    refetchOnWindowFocus: false,
-    staleTime: 5 * 60 * 1000,
-  });
 
+  const { data: user, isLoading: isUserLoading } = trpc.profile.me.useQuery(undefined, {
+    refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000,
+  });
   const { data: tasks, isLoading: isTasksLoading } = trpc.task.getTasks.useQuery();
   const { data: groups = [], refetch: refetchGroups } = trpc.group.getGroups.useQuery();
   const { data: invites = [], refetch: refetchInvites, isLoading: isInvitesLoading } = trpc.group.getInvites.useQuery();
-  
+  const { data: overview, isLoading: isOverviewLoading } = trpc.calendar.getDashboardOverview.useQuery();
+
   const acceptInviteMutation = trpc.group.acceptInvite.useMutation({
-    onSuccess: () => {
-      refetchInvites();
-      refetchGroups();
-    },
+    onSuccess: () => { refetchInvites(); refetchGroups(); },
   });
-
   const rejectInviteMutation = trpc.group.rejectInvite.useMutation({
-    onSuccess: () => {
-      refetchInvites();
-    },
+    onSuccess: () => refetchInvites(),
   });
-
   const createGroupMutation = trpc.group.createGroup.useMutation({
     onSuccess: () => {
       setShowCreateGroupModal(false);
-      setGroupName('');
-      setGroupDesc('');
+      setGroupName(''); setGroupDesc('');
       refetchGroups();
     },
   });
@@ -270,271 +259,390 @@ export default function DashboardScreen() {
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
 
-  const isLoading = isUserLoading || isTasksLoading;
+  const isLoading = isUserLoading || isTasksLoading || isOverviewLoading;
   const inviteCount = invites?.length ?? 0;
+  const activeTasksCount = tasks?.filter((t: any) => t.status !== 'done').length || 0;
 
-  const handleCreateGroup = () => {
-    if (!groupName.trim()) return;
-    createGroupMutation.mutate({
-      name: groupName.trim(),
-      description: groupDesc.trim() || undefined,
-    });
+  const formatTime = (d: string) =>
+    new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 17) return 'Good afternoon';
+    return 'Good evening';
   };
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
 
   if (isLoading && !user) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: THEME_BLUE }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: DARK }}>
         <ActivityIndicator size="large" color="#e87a6e" />
       </View>
     );
   }
 
-  const activeTasksCount = tasks?.filter((t: any) => t.status !== 'done').length || 0;
-  const initials = (user?.name || 'Sarah Johnson')
-    .split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
-
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric' });
+  const STATS = [
+    { num: String(activeTasksCount), label: 'Tasks', Icon: IconCheck, color: '#e87a6e', bg: '#fff0ee' },
+    { num: String(overview?.todayCount || 0), label: 'Events', Icon: IconCalendar, color: '#6366f1', bg: '#eef0ff' },
+    { num: '3', label: 'Drafts', Icon: IconMail, color: '#10b981', bg: '#ecfdf5' },
+  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME_BLUE} />
+      <StatusBar barStyle="light-content" backgroundColor={DARK} />
+
       <InvitesModal
-        visible={showInvitesModal}
-        onClose={() => setShowInvitesModal(false)}
-        invites={invites.map((invite: any) => ({
-          groupId: invite.groupId,
-          groupName: invite.group?.name || 'Unknown Department',
-          groupDescription: invite.group?.description,
+        visible={showInvitesModal} onClose={() => setShowInvitesModal(false)}
+        invites={invites.map((inv: any) => ({
+          groupId: inv.groupId, groupName: inv.group?.name || 'Unknown',
+          groupDescription: inv.group?.description,
         }))}
-        onAccept={(groupId) => {
-          acceptInviteMutation.mutate({ groupId });
-        }}
-        onReject={(groupId) => {
-          rejectInviteMutation.mutate({ groupId });
-        }}
+        onAccept={(id) => acceptInviteMutation.mutate({ groupId: id })}
+        onReject={(id) => rejectInviteMutation.mutate({ groupId: id })}
         loadingInvites={isInvitesLoading}
         acceptingId={acceptInviteMutation.variables?.groupId}
         rejectingId={rejectInviteMutation.variables?.groupId}
       />
       <CreateGroupModal
-        visible={showCreateGroupModal}
-        onClose={() => setShowCreateGroupModal(false)}
-        groupName={groupName}
-        setGroupName={setGroupName}
-        groupDesc={groupDesc}
-        setGroupDesc={setGroupDesc}
-        onCreate={handleCreateGroup}
+        visible={showCreateGroupModal} onClose={() => setShowCreateGroupModal(false)}
+        groupName={groupName} setGroupName={setGroupName}
+        groupDesc={groupDesc} setGroupDesc={setGroupDesc}
+        onCreate={() => { if (groupName.trim()) createGroupMutation.mutate({ name: groupName.trim(), description: groupDesc.trim() || undefined }); }}
         loading={createGroupMutation.isPending}
       />
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
         bounces={false}
-        contentContainerStyle={{ flexGrow: 1, backgroundColor: '#f6f5f3' }}
-        style={{ backgroundColor: THEME_BLUE }}
+        style={{ backgroundColor: DARK }}
+        contentContainerStyle={{ flexGrow: 1 }}
       >
-        <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
-          
-          {/* ── Hero (Special Blue section) ── */}
-          <View style={{ backgroundColor: THEME_BLUE, paddingLeft: 20, paddingRight: 20, paddingTop: 60, paddingBottom: 40 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-              <View>
-                <Text className="text-white/40 text-[13px] font-semibold mb-1">Good morning</Text>
-                <Text className="text-white text-[28px] font-black tracking-tighter" style={{ letterSpacing: -0.6 }}>
-                  {user?.name || 'xyz'}
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
-                {/* Bell Icon */}
-                <TouchableOpacity
-                  onPress={() => setShowInvitesModal(true)}
-                  style={{ position: 'relative' }}
-                >
-                  <View className="w-[52px] h-[52px] rounded-[18px] bg-white/10 items-center justify-center border border-white/20">
-                    <IconBell color="white" size={22} />
-                  </View>
-                  {inviteCount > 0 && (
-                    <View style={{
-                      position: 'absolute', top: -8, right: -8,
-                      width: 24, height: 24, borderRadius: 12,
-                      backgroundColor: '#ff3b30', borderWidth: 3, borderColor: THEME_BLUE,
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Text className="text-white text-[10px] font-black">{inviteCount}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                {/* Profile Icon */}
-                <View style={{ position: 'relative' }}>
-                  <View className="w-[52px] h-[52px] rounded-[18px] bg-[#e87a6e] items-center justify-center border border-white/10">
-                    <Text className="text-white text-[16px] font-black">{initials}</Text>
-                  </View>
-                  <View style={{
-                    position: 'absolute', top: -5, right: -5,
-                    width: 20, height: 20, borderRadius: 10,
-                    backgroundColor: '#ff3b30', borderWidth: 3, borderColor: THEME_BLUE,
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Text className="text-white text-[9px] font-black">3</Text>
-                  </View>
-                </View>
-              </View>
+        {/* ── Hero ── */}
+        <View style={S.hero}>
+          {/* Greeting row */}
+          <View style={S.heroRow}>
+            <View>
+              <Text style={S.greeting}>{getGreeting()}</Text>
+              <Text style={S.heroName}>{user?.name || 'there'}</Text>
             </View>
-
-            <View style={{ flexDirection: 'row' }}>
-              {[today, `${activeTasksCount} tasks pending`].map((label, i, arr) => (
-                <View key={label} className="flex-row items-center bg-white/5 border border-white/10" style={{
-                  paddingHorizontal: 16, paddingVertical: 8,
-                  borderRadius: 14, marginRight: i < arr.length - 1 ? 10 : 0
-                }}>
-                  {i === 0 && <View className="w-1.5 h-1.5 rounded-full bg-[#e87a6e] mr-1.5" />}
-                  <Text className="text-white/60 text-[12px] font-semibold">{label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* ── Light body ── */}
-          <View style={{ 
-            backgroundColor: '#f6f5f3', 
-            borderTopLeftRadius: 36, 
-            borderTopRightRadius: 36, 
-            paddingLeft: 20, 
-            paddingRight: 20, 
-            paddingTop: 32, 
-            paddingBottom: 110,
-            marginTop: -30,
-            flex: 1,
-            width: '100%',
-          }}>
-
-            {/* Section label */}
-            <Text className="text-[11px] font-extrabold text-[#9ca3af] uppercase mb-4 ml-1" style={{ letterSpacing: 1.4 }}>
-              Overview
-            </Text>
-
-            {/* Stats Grid - Optimization for Mobile Height */}
-            <View style={{ flexDirection: 'row', marginBottom: 20, width: '100%' }}>
-              {[
-                { num: String(activeTasksCount),  label: 'Tasks',  Icon: IconCheck,    color: '#e87a6e', bg: '#fff0ee', badge: activeTasksCount > 0 ? `+${activeTasksCount}` : null },
-                { num: '0',  label: 'Events', Icon: IconCalendar, color: '#6366f1', bg: '#eef0ff', badge: null },
-                { num: '0',  label: 'Drafts', Icon: IconMail,     color: '#10b981', bg: '#ecfdf5', badge: null },
-              ].map((s, i, arr) => (
-                <View key={s.label} className="bg-white rounded-[22px]" style={{
-                  flex: 1,
-                  padding: 12, // Reduced from 16
-                  marginRight: i < arr.length - 1 ? 10 : 0, // Reduced from 12
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2,
-                }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <View className="w-[30px] h-[30px] rounded-[9px] items-center justify-center" style={{ backgroundColor: s.bg }}>
-                      <s.Icon color={s.color} size={14} />
-                    </View>
-                    {s.badge && (
-                      <View style={{ backgroundColor: s.bg }} className="px-[6px] py-[1.5px] rounded-[6px]">
-                        <Text style={{ color: s.color }} className="text-[9px] font-extrabold">{s.badge}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text className="text-[24px] font-black text-[#0f172a] tracking-tight" style={{ lineHeight: 28 }}>{s.num}</Text>
-                  <Text className="text-[10px] text-[#9ca3af] font-bold mt-1">{s.label}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={{ marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <Text className="text-[13px] font-extrabold text-[#0f172a]">Departments</Text>
-                <TouchableOpacity onPress={() => setShowCreateGroupModal(true)} style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#e0f2fe' }}>
-                  <Text style={{ color: '#0c4a6e', fontSize: 12, fontWeight: '700' }}>New</Text>
-                </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowInvitesModal(true)} style={{ position: 'relative' }}>
+              <View style={S.bellBtn}>
+                <IconBell color="rgba(255,255,255,0.85)" size={18} />
               </View>
-
-              {groups.length ? (
-                <View style={{ gap: 12 }}>
-                  {groups.map((group: any) => (
-                    <TouchableOpacity
-                      key={group.id}
-                      activeOpacity={0.85}
-                      onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
-                      style={{ backgroundColor: '#fff', borderRadius: 22, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
-                    >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <View style={{ flex: 1, paddingRight: 10 }}>
-                          <Text style={{ color: '#0f172a', fontSize: 15, fontWeight: '800', marginBottom: 4 }}>{group.name}</Text>
-                          {group.description ? <Text style={{ color: '#6b7280', fontSize: 12 }}>{group.description}</Text> : <Text style={{ color: '#9ca3af', fontSize: 12 }}>No description added</Text>}
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={{ color: '#06b6d4', fontSize: 12, fontWeight: '700' }}>{group.members?.length ?? 0} members</Text>
-                          <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 6 }}>Tap to manage</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : (
-                <View style={{ backgroundColor: '#fff', borderRadius: 22, padding: 18, alignItems: 'center' }}>
-                  <Text style={{ color: '#0f172a', fontSize: 14, fontWeight: '700', marginBottom: 6 }}>No departments yet</Text>
-                  <Text style={{ color: '#6b7280', fontSize: 12, textAlign: 'center' }}>Create a department to group events and invite members by email.</Text>
+              {inviteCount > 0 && (
+                <View style={S.badge}>
+                  <Text style={S.badgeText}>{inviteCount}</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
+          </View>
 
-            {/* Meeting card */}
-            <TouchableOpacity
-              activeOpacity={0.9}
-              className="bg-[#e87a6e] rounded-[24px]"
-              style={{ 
-                padding: 18, 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                marginBottom: 12,
-                shadowColor: '#e87a6e', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10,
-              }}
-            >
-              <View style={{ flex: 1, paddingRight: 10 }}>
-                <View className="self-start bg-white/25 rounded-[10px] px-2.5 py-1 mb-2.5">
-                  <Text className="text-white text-[10px] font-extrabold uppercase tracking-widest">NEXT MEETING</Text>
+          {/* Date + tasks pill row */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+            <View style={S.pill}>
+              <View style={S.pillDot} />
+              <Text style={S.pillText}>{today}</Text>
+            </View>
+            <View style={S.pill}>
+              <Text style={S.pillText}>{activeTasksCount} tasks pending</Text>
+            </View>
+          </View>
+
+          {/* ── Stat row — inline, compact ── */}
+          <View style={S.statsRow}>
+            {STATS.map((s, i) => (
+              <React.Fragment key={s.label}>
+                <View style={S.statItem}>
+                  <View style={[S.statIcon, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+                    <s.Icon color={s.color} size={14} />
+                  </View>
+                  <View>
+                    <Text style={S.statNum}>{s.num}</Text>
+                    <Text style={S.statLabel}>{s.label}</Text>
+                  </View>
                 </View>
-                <Text className="text-white text-[18px] font-black tracking-tighter leading-5 mb-1.5">
-                  Project Strategy Review
+                {i < STATS.length - 1 && <View style={S.statDivider} />}
+              </React.Fragment>
+            ))}
+          </View>
+        </View>
+
+        {/* ── Body ── */}
+        <View style={S.body}>
+
+          {/* ── Next Meeting card — slim ── */}
+          {overview?.nextEvent ? (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={() => router.push('/(tabs)/calendar')}
+              style={S.meetingCard}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={S.meetingTag}>NEXT MEETING</Text>
+                <Text style={S.meetingTitle} numberOfLines={1}>{overview.nextEvent.title}</Text>
+                <Text style={S.meetingMeta}>
+                  {overview.nextEvent.group?.name ? `${overview.nextEvent.group.name} · ` : ''}
+                  {formatTime(overview.nextEvent.startAt)} – {formatTime(overview.nextEvent.endAt)}
                 </Text>
-                <Text className="text-white/70 text-[12px] font-semibold">Today · 2:30 – 3:30 PM</Text>
               </View>
-              <View className="w-[52px] h-[52px] rounded-[18px] bg-white/20 items-center justify-center">
-                <IconUsers color="white" size={22} />
+              <View style={S.meetingIcon}>
+                <IconUsers color="white" size={18} />
               </View>
             </TouchableOpacity>
-            {/* AI banner */}
+          ) : (
+            <View style={S.meetingEmpty}>
+              <View style={S.meetingEmptyIcon}>
+                <IconCalendar color="#94a3b8" size={18} />
+              </View>
+              <View>
+                <Text style={S.meetingEmptyTitle}>No upcoming meetings</Text>
+                <Text style={S.meetingEmptyMeta}>You're free — or schedule something new.</Text>
+              </View>
+            </View>
+          )}
 
+          {/* ── Departments ── */}
+          <View style={S.sectionHeader}>
+            <Text style={S.sectionLabel}>DEPARTMENTS</Text>
+            <TouchableOpacity onPress={() => setShowCreateGroupModal(true)} style={S.newBtn}>
+              <IconPlus color="#0c4a6e" size={11} />
+              <Text style={S.newBtnText}>New</Text>
+            </TouchableOpacity>
+          </View>
 
-            {/* Log */}
-            <Text className="text-[11px] font-extrabold text-[#9ca3af] uppercase mb-4 ml-1" style={{ letterSpacing: 1.4 }}>
-              Secretarial log
-            </Text>
-            <View className="bg-white rounded-[24px] overflow-hidden mb-5">
-              {LOG_ITEMS.map((item, i) => (
-                <View key={item.id} style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  paddingHorizontal: 20, paddingVertical: 14, // Reduced from 16
-                  borderBottomWidth: i < LOG_ITEMS.length - 1 ? 1 : 0,
-                  borderBottomColor: '#f8fafc',
-                }}>
-                  <View className="w-10 h-10 rounded-[13px] items-center justify-center mr-3.5" style={{ backgroundColor: item.bg }}>
-                    <item.Icon color={item.iconColor} size={18} />
+          {groups.length > 0 ? (
+            <View style={S.card}>
+              {(groups as any[]).map((group: any, i: number) => (
+                <TouchableOpacity
+                  key={group.id}
+                  activeOpacity={0.7}
+                  onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
+                  style={[
+                    S.groupRow,
+                    i < groups.length - 1 && S.groupRowDivider,
+                  ]}
+                >
+                  {/* Colored initial */}
+                  <View style={S.groupInitial}>
+                    <Text style={S.groupInitialText}>{group.name.slice(0, 1).toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text className="text-[#0f172a] text-[14px] font-bold">{item.text}</Text>
-                    <Text className="text-[#9ca3af] text-[11px] font-semibold mt-1">{item.time}</Text>
+                    <Text style={S.groupName}>{group.name}</Text>
+                    <Text style={S.groupDesc} numberOfLines={1}>
+                      {group.description || 'No description'}
+                    </Text>
                   </View>
-                  <Text className="text-[#d1d5db] text-[20px] ml-2">›</Text>
-                </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <Text style={S.groupMembers}>{group.members?.length ?? 0} members</Text>
+                    <IconChevron size={14} color="#d1d5db" />
+                  </View>
+                </TouchableOpacity>
               ))}
             </View>
+          ) : (
+            <View style={[S.card, { padding: 20, alignItems: 'center' }]}>
+              <Text style={{ color: '#374151', fontSize: 13, fontWeight: '600', marginBottom: 4 }}>No departments yet</Text>
+              <Text style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center', lineHeight: 18 }}>
+                Create a department to group events and invite members.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowCreateGroupModal(true)}
+                style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: DARK, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10 }}
+              >
+                <IconPlus color="#fff" size={12} />
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Create department</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
+          {/* ── Secretarial Log ── */}
+          <View style={[S.sectionHeader, { marginTop: 24 }]}>
+            <Text style={S.sectionLabel}>SECRETARIAL LOG</Text>
           </View>
+
+          <View style={S.card}>
+            {LOG_ITEMS.map((item, i) => (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.7}
+                style={[S.logRow, i < LOG_ITEMS.length - 1 && S.logRowDivider]}
+              >
+                <View style={[S.logIcon, { backgroundColor: item.bg }]}>
+                  <item.Icon color={item.iconColor} size={15} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.logText}>{item.text}</Text>
+                  <Text style={S.logMeta}>{item.time}</Text>
+                </View>
+                <IconChevron size={14} color="#d1d5db" />
+              </TouchableOpacity>
+            ))}
+          </View>
+
         </View>
       </ScrollView>
     </View>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const S = {
+  // Hero (dark section)
+  hero: {
+    backgroundColor: DARK,
+    paddingTop: 58,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  heroRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'flex-start' as const,
+  },
+  greeting: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '500' as const, marginBottom: 3 },
+  heroName: { color: '#fff', fontSize: 24, fontWeight: '800' as const, letterSpacing: -0.5 },
+  bellBtn: {
+    width: 40, height: 40, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  badge: {
+    position: 'absolute' as const, top: -4, right: -4,
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#ff3b30', borderWidth: 2, borderColor: DARK,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' as const },
+
+  // Pills
+  pill: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  pillDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#e87a6e', marginRight: 6 },
+  pillText: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '500' as const },
+
+  // Stats row — horizontal inside hero
+  statsRow: {
+    flexDirection: 'row' as const,
+    marginTop: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingVertical: 14, paddingHorizontal: 8,
+  },
+  statItem: {
+    flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const,
+    justifyContent: 'center' as const, gap: 9,
+  },
+  statIcon: {
+    width: 30, height: 30, borderRadius: 9,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  statNum: { color: '#fff', fontSize: 18, fontWeight: '800' as const, lineHeight: 22 },
+  statLabel: { color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  statDivider: { width: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 4 },
+
+  // Body (light section)
+  body: {
+    backgroundColor: '#f6f5f3',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 110,
+    marginTop: -20,
+  },
+
+  // Next meeting
+  meetingCard: {
+    backgroundColor: '#e87a6e',
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 20,
+    gap: 12,
+  },
+  meetingTag: {
+    color: 'rgba(255,255,255,0.65)', fontSize: 9,
+    fontWeight: '800' as const, letterSpacing: 1.2, marginBottom: 5,
+  },
+  meetingTitle: { color: '#fff', fontSize: 16, fontWeight: '800' as const, marginBottom: 4, letterSpacing: -0.3 },
+  meetingMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' as const },
+  meetingIcon: {
+    width: 42, height: 42, borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  meetingEmpty: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 14,
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    gap: 12, marginBottom: 20,
+    borderWidth: 1, borderColor: '#f0f0f0',
+  },
+  meetingEmptyIcon: {
+    width: 38, height: 38, borderRadius: 11,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  meetingEmptyTitle: { color: '#374151', fontSize: 13, fontWeight: '700' as const },
+  meetingEmptyMeta: { color: '#9ca3af', fontSize: 12, marginTop: 2 },
+
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row' as const, justifyContent: 'space-between' as const,
+    alignItems: 'center' as const, marginBottom: 10,
+  },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700' as const,
+    color: '#9ca3af', letterSpacing: 1,
+  },
+  newBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    backgroundColor: '#e0f2fe', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8,
+  },
+  newBtnText: { color: '#0c4a6e', fontSize: 11, fontWeight: '700' as const },
+
+  // Shared card shell
+  card: {
+    backgroundColor: '#fff', borderRadius: 18,
+    borderWidth: 1, borderColor: '#f0f0f0',
+    overflow: 'hidden' as const,
+  },
+
+  // Department rows
+  groupRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    paddingVertical: 12, paddingHorizontal: 14, gap: 11,
+  },
+  groupRowDivider: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  groupInitial: {
+    width: 36, height: 36, borderRadius: 11,
+    backgroundColor: '#f0fdf4',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  groupInitialText: { color: '#16a34a', fontSize: 14, fontWeight: '800' as const },
+  groupName: { color: '#111827', fontSize: 14, fontWeight: '700' as const },
+  groupDesc: { color: '#9ca3af', fontSize: 12, marginTop: 1 },
+  groupMembers: { color: '#06b6d4', fontSize: 11, fontWeight: '700' as const },
+
+  // Log rows
+  logRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    paddingVertical: 12, paddingHorizontal: 14, gap: 12,
+  },
+  logRowDivider: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  logIcon: {
+    width: 36, height: 36, borderRadius: 11,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  logText: { color: '#111827', fontSize: 13, fontWeight: '600' as const },
+  logMeta: { color: '#9ca3af', fontSize: 11, marginTop: 2 },
+};

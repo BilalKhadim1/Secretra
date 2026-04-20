@@ -47,10 +47,19 @@ export default function CalendarScreen() {
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const utils = trpc.useUtils();
 
-  // Use tRPC to fetch events
-  const { data: events, isLoading, refetch, isRefetching } = trpc.calendar.getEvents.useQuery();
+  // Get current user for permission checks
+  const { data: currentUser } = trpc.profile.me.useQuery();
+
+  // Fetch groups for the filter
+  const { data: groups = [] } = trpc.group.getGroups.useQuery();
+
+  // Use tRPC to fetch events, with optional group filter
+  const { data: events, isLoading, refetch, isRefetching } = trpc.calendar.getEvents.useQuery(
+    selectedGroupId ? { groupId: selectedGroupId } : undefined
+  );
 
   const groupedEvents = useMemo(() => {
     if (!events) return {};
@@ -107,49 +116,82 @@ export default function CalendarScreen() {
             <TouchableOpacity className="w-10 h-10 rounded-full bg-slate-50 items-center justify-center">
               <Bell size={20} color={NAVY} />
             </TouchableOpacity>
-            <TouchableOpacity
-              className="w-10 h-10 rounded-full bg-[#111827] items-center justify-center"
-              onPress={() => {
-                setEditingEvent(null);
-                setShowAddEvent(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Plus size={20} color="white" />
-            </TouchableOpacity>
-            <AddEventModal
-              visible={showAddEvent || !!editingEvent}
-              eventToEdit={editingEvent}
-              onClose={() => {
-                setShowAddEvent(false);
-                setEditingEvent(null);
-                setActionMenuId(null);
-              }}
-            />
           </View>
         </View>
 
-        {/* Mini Day Scroller (Mocked for visual) */}
-        <View className="flex-row justify-between items-center py-2">
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
-            const isToday = idx === 0; // Just for demo
-            return (
-              <View key={day} className="items-center">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase mb-2">{day}</Text>
+        {/* Group / Department Filter */}
+        {groups.length > 0 && (
+          <View className="mb-4">
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => setSelectedGroupId(null)}
+                className={`px-4 py-2 rounded-full border ${!selectedGroupId ? 'bg-[#111827] border-[#111827]' : 'bg-white border-slate-200'}`}
+              >
+                <Text className={`text-[12px] font-bold ${!selectedGroupId ? 'text-white' : 'text-slate-500'}`}>My Calendar</Text>
+              </TouchableOpacity>
+
+              {groups.map((group: any) => (
                 <TouchableOpacity
-                  className={`w-9 h-9 rounded-xl items-center justify-center ${isToday ? 'bg-navy' : 'bg-transparent'}`}
-                  style={isToday ? { backgroundColor: NAVY } : {}}
+                  key={group.id}
+                  onPress={() => setSelectedGroupId(group.id)}
+                  className={`px-4 py-2 rounded-full border ${selectedGroupId === group.id ? 'bg-[#06b6d4] border-[#06b6d4]' : 'bg-white border-slate-200'}`}
                 >
-                  <Text className={`text-sm font-bold ${isToday ? 'text-white' : 'text-slate-600'}`}>{13 + idx}</Text>
+                  <Text className={`text-[12px] font-bold ${selectedGroupId === group.id ? 'text-white' : 'text-slate-500'}`}>{group.name}</Text>
                 </TouchableOpacity>
-                {isToday && <View className="w-1 h-1 rounded-full bg-coral mt-1" style={{ backgroundColor: '#e87a6e' }} />}
-              </View>
-            );
-          })}
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Horizontal Dynamic Day Scroller */}
+        <View className="py-4 bg-white">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+          >
+            {(() => {
+              const days = [];
+              const curr = new Date();
+              // Show 14 days starting from 2 days ago
+              const start = new Date(curr);
+              start.setDate(curr.getDate() - 2);
+
+              for (let i = 0; i < 14; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                const isSelected = d.toDateString() === selectedDate.toDateString();
+                const isTodayDate = d.toDateString() === new Date().toDateString();
+
+                days.push(
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setSelectedDate(d)}
+                    className="items-center"
+                  >
+                    <Text className={`text-[10px] font-bold ${isSelected ? 'text-[#111827]' : 'text-slate-400'} uppercase mb-2`}>
+                      {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                    </Text>
+                    <View
+                      className={`w-9 h-11 rounded-2xl items-center justify-center ${isSelected ? 'bg-[#111827]' : 'bg-slate-50'}`}
+                      style={isSelected ? { backgroundColor: '#111827' } : {}}
+                    >
+                      <Text className={`text-[13px] font-bold ${isSelected ? 'text-white' : 'text-slate-700'}`}>
+                        {d.getDate()}
+                      </Text>
+                    </View>
+                    {isTodayDate && !isSelected && <View className="w-1.5 h-1.5 rounded-full bg-[#e87a6e] mt-1.5" />}
+                    {isSelected && <View className="w-1.5 h-1.5 rounded-full bg-[#111827] mt-1.5" />}
+                  </TouchableOpacity>
+                );
+              }
+              return days;
+            })()}
+          </ScrollView>
         </View>
       </View>
 
-      {/* Agenda List */}
+      {/* Agenda List for Selected Day */}
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -158,51 +200,62 @@ export default function CalendarScreen() {
           <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={NAVY} />
         }
       >
-        {sortedDates.length === 0 ? (
-          <View className="mt-20 items-center justify-center px-10">
-            <View className="w-20 h-20 bg-slate-100 rounded-full items-center justify-center mb-6">
-              <CalendarIcon size={40} color="#cbd5e1" />
-            </View>
-            <Text className="text-xl font-bold text-slate-400 text-center">Your schedule is empty</Text>
-            <Text className="text-sm text-slate-400 text-center mt-2 leading-5">
-              Sync your Google Calendar or add a new event manually to get started.
+        <View className="mt-6">
+          <View className="px-6 mb-3 flex-row items-center justify-between">
+            <Text className="text-sm font-black text-slate-400 uppercase tracking-widest">
+              {isToday(selectedDate.toDateString()) ? 'Today' : selectedDate.toDateString()}
             </Text>
+            <View className="h-[1px] flex-1 bg-slate-100 ml-4" />
           </View>
-        ) : (
-          sortedDates.map((dateKey) => (
-            <View key={dateKey} className="mt-6">
-              <View className="px-6 mb-3 flex-row items-center justify-between">
-                <Text className="text-sm font-black text-slate-400 uppercase tracking-widest">
-                  {isToday(dateKey) ? 'Today' : dateKey}
-                </Text>
-                <View className="h-[1px] flex-1 bg-slate-100 ml-4" />
-              </View>
 
-              <View className="px-4">
-                {groupedEvents[dateKey].map((event: any) => (
-                  <EventItem
-                    key={event.id}
-                    event={event}
-                    isMenuOpen={actionMenuId === event.id}
-                    onToggleMenu={() => setActionMenuId(actionMenuId === event.id ? null : event.id)}
-                    onEdit={() => {
-                      setActionMenuId(null);
-                      setEditingEvent(event);
-                      setShowAddEvent(true);
-                    }}
-                    onDelete={() => deleteEventMutation.mutate({ id: event.id })}
-                    onPress={() => {
-                      setActionMenuId(null);
-                      setEditingEvent(event);
-                      setShowAddEvent(true);
-                    }}
-                  />
-                ))}
-              </View>
-            </View>
-          ))
-        )}
+          <View className="px-4">
+            {(() => {
+              const dayEvents = (events || []).filter(e =>
+                new Date(e.startAt).toDateString() === selectedDate.toDateString()
+              );
+
+              if (dayEvents.length === 0) {
+                return (
+                  <View className="py-10 items-center justify-center">
+                    <Text className="text-slate-400 font-medium">No events for this day</Text>
+                  </View>
+                );
+              }
+
+              return dayEvents.map((event: any) => (
+                <EventItem
+                  key={event.id}
+                  event={event}
+                  isMenuOpen={actionMenuId === event.id}
+                  canEdit={event.userId === currentUser?.id}
+                  onToggleMenu={() => setActionMenuId(actionMenuId === event.id ? null : event.id)}
+                  onEdit={() => {
+                    setActionMenuId(null);
+                    setEditingEvent(event);
+                  }}
+                  onDelete={() => deleteEventMutation.mutate({ id: event.id })}
+                  onPress={() => {
+                    setActionMenuId(null);
+                    setEditingEvent(event);
+                  }}
+                />
+              ));
+            })()}
+          </View>
+        </View>
       </ScrollView>
+
+      {editingEvent && (
+        <AddEventModal
+          visible={!!editingEvent}
+          eventToEdit={editingEvent}
+          readOnly={editingEvent.userId !== currentUser?.id}
+          onClose={() => {
+            setEditingEvent(null);
+            setActionMenuId(null);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -211,7 +264,23 @@ function isToday(dateString: string) {
   return new Date(dateString).toDateString() === new Date().toDateString();
 }
 
-function EventItem({ event, isMenuOpen, onToggleMenu, onEdit, onDelete, onPress }: { event: any; isMenuOpen: boolean; onToggleMenu: () => void; onEdit: () => void; onDelete: () => void; onPress: () => void }) {
+function EventItem({
+  event,
+  isMenuOpen,
+  canEdit,
+  onToggleMenu,
+  onEdit,
+  onDelete,
+  onPress
+}: {
+  event: any;
+  isMenuOpen: boolean;
+  canEdit: boolean;
+  onToggleMenu: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onPress: () => void
+}) {
   const startTime = new Date(event.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const endTime = new Date(event.endAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -235,14 +304,21 @@ function EventItem({ event, isMenuOpen, onToggleMenu, onEdit, onDelete, onPress 
           <View className="flex-row flex-1 flex-wrap items-center mr-2 gap-2">
             <View className="flex-1">
               <Text className="text-[17px] font-semibold text-[#111827]" numberOfLines={1}>{event.title}</Text>
+              {event.group && (
+                <Text className="text-[11px] font-bold text-[#06b6d4] mt-0.5">
+                  Shared with {event.group.name}
+                </Text>
+              )}
             </View>
             <View className="rounded-full px-3 py-1" style={{ backgroundColor: badgeBg }}>
               <Text className="text-[11px] font-bold" style={{ color: badgeColor }}>{badgeLabel}</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onToggleMenu} className="p-2 rounded-full bg-slate-50">
-            <MoreVertical size={18} color="#64748b" />
-          </TouchableOpacity>
+          {canEdit && (
+            <TouchableOpacity onPress={onToggleMenu} className="p-2 rounded-full bg-slate-50">
+              <MoreVertical size={18} color="#64748b" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {isMenuOpen && (

@@ -31,12 +31,13 @@ const PRIORITY_STYLES: Record<Priority, { bg: string; text: string; activeBg: st
 };
 
 function EventTypeSection({
-    selected, onSelect, customValue, onCustomChange,
+    selected, onSelect, customValue, onCustomChange, readOnly
 }: {
     selected: string;
     onSelect: (key: string) => void;
     customValue: string;
     onCustomChange: (v: string) => void;
+    readOnly?: boolean;
 }) {
     return (
         <View className="bg-white rounded-[20px] overflow-hidden">
@@ -51,6 +52,7 @@ function EventTypeSection({
                             <TouchableOpacity
                                 key={t.key}
                                 onPress={() => onSelect(t.key)}
+                                disabled={readOnly}
                                 className="items-center rounded-2xl py-3"
                                 style={{
                                     width: '22%',
@@ -115,9 +117,11 @@ interface Props {
     visible: boolean;
     onClose: () => void;
     eventToEdit?: any;
+    initialGroupId?: string;
+    readOnly?: boolean;
 }
 
-export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
+export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, readOnly }: Props) {
     const utils = trpc.useUtils();
 
     const [eventType, setEventType] = useState('meeting');
@@ -126,13 +130,20 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
     const [description, setDesc] = useState('');
     const [location, setLocation] = useState('');
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
     const [isAllDay, setIsAllDay] = useState(false);
     const [priority, setPriority] = useState<Priority>('medium');
     const [startAt, setStart] = useState(() => {
-        const d = new Date(); d.setMinutes(0, 0, 0); return d;
+        const d = new Date();
+        d.setMinutes(0, 0, 0);
+        d.setHours(d.getHours() + 1);
+        return d;
     });
     const [endAt, setEnd] = useState(() => {
-        const d = new Date(); d.setHours(d.getHours() + 1, 0, 0, 0); return d;
+        const d = new Date();
+        d.setMinutes(0, 0, 0);
+        d.setHours(d.getHours() + 2);
+        return d;
     });
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
@@ -140,10 +151,40 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
     // Fetch groups
     const { data: groups = [] } = trpc.group.getGroups.useQuery();
 
+    // Fetch members of the selected group
+    const { data: groupMembers = [] } = trpc.group.getGroup.useQuery(
+        { id: selectedGroupId! },
+        { enabled: !!selectedGroupId }
+    );
+
+    // Filtered members (excluding current user if they are the owner)
+    const membersList = (groupMembers as any)?.members || [];
+
+    // Check availability for selected attendees
+    const { data: availability = [] } = (trpc.calendar as any).getTeamAvailability.useQuery(
+        {
+            groupId: selectedGroupId!,
+            startDate: startAt.toISOString(),
+            endDate: endAt.toISOString(),
+        },
+        {
+            enabled: !!selectedGroupId && visible,
+            refetchInterval: 10000,
+        }
+    );
+
+    // Only show busy status for SELECTED attendees
+    const busyMembers = (availability as any[]).filter((m: any) =>
+        m.isBusy && selectedAttendeeIds.includes(m.userId)
+    );
+
     const { mutate: createEvent, isPending: isCreating } = trpc.calendar.createEvent.useMutation({
         onSuccess: () => {
             utils.calendar.getEvents.invalidate();
             handleClose();
+        },
+        onError: (error) => {
+            alert(error.message);
         },
     });
 
@@ -152,45 +193,57 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
             utils.calendar.getEvents.invalidate();
             handleClose();
         },
+        onError: (error) => {
+            alert(error.message);
+        },
     });
 
     const isPending = isCreating || isUpdating;
 
     useEffect(() => {
-        if (visible && eventToEdit) {
-            const eventTypeKey = EVENT_TYPES.some((t) => t.key === eventToEdit.eventType)
-                ? eventToEdit.eventType
-                : 'other';
+        if (visible) {
+            if (eventToEdit) {
+                const eventTypeKey = EVENT_TYPES.some((t) => t.key === eventToEdit.eventType)
+                    ? eventToEdit.eventType
+                    : 'other';
 
-            setTitle(eventToEdit.title ?? '');
-            setDesc(eventToEdit.description ?? '');
-            setLocation(eventToEdit.location ?? '');
-            setSelectedGroupId(eventToEdit.groupId ?? null);
-            setIsAllDay(eventToEdit.isAllDay ?? false);
-            setPriority(eventToEdit.priority ?? 'medium');
-            setStart(new Date(eventToEdit.startAt));
-            setEnd(new Date(eventToEdit.endAt));
-            setEventType(eventTypeKey);
-            setCustomType(eventTypeKey === 'other' ? (eventToEdit.eventType ?? '') : '');
+                setTitle(eventToEdit.title ?? '');
+                setDesc(eventToEdit.description ?? '');
+                setLocation(eventToEdit.location ?? '');
+                setSelectedGroupId(eventToEdit.groupId ?? null);
+                setSelectedAttendeeIds(eventToEdit.attendees?.map((a: any) => a.id) ?? []);
+                setIsAllDay(eventToEdit.isAllDay ?? false);
+                setPriority(eventToEdit.priority ?? 'medium');
+                setStart(new Date(eventToEdit.startAt));
+                setEnd(new Date(eventToEdit.endAt));
+                setEventType(eventTypeKey);
+                setCustomType(eventTypeKey === 'other' ? (eventToEdit.eventType ?? '') : '');
+            } else if (initialGroupId) {
+                setSelectedGroupId(initialGroupId);
+                // Users must now manually select attendees, so we leave this empty
+                setSelectedAttendeeIds([]);
+            }
         }
-    }, [visible, eventToEdit]);
+    }, [visible, eventToEdit, initialGroupId]);
 
     function handleClose() {
         setTitle(''); setDesc(''); setLocation('');
         setSelectedGroupId(null);
+        setSelectedAttendeeIds([]);
         setIsAllDay(false); setPriority('medium');
         setEventType('meeting'); setCustomType('');
         onClose();
     }
 
     function handleSave() {
-        if (!title.trim()) return;
+        if (readOnly || !title.trim()) return;
 
         const payload = {
             title: title.trim(),
             description: description || undefined,
             location: location || undefined,
             groupId: selectedGroupId || undefined,
+            attendeeIds: selectedAttendeeIds.length > 0 ? selectedAttendeeIds : undefined,
             isAllDay,
             priority,
             startAt: startAt.toISOString(),
@@ -220,18 +273,22 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                         <X size={18} color={NAVY} />
                     </TouchableOpacity>
                     <Text className="text-[17px] font-bold text-[#111827]">
-                        {eventToEdit ? 'Edit Event' : 'New Event'}
+                        {readOnly ? 'Event Details' : (eventToEdit ? 'Edit Event' : 'New Event')}
                     </Text>
-                    <TouchableOpacity
-                        onPress={handleSave}
-                        disabled={!title.trim() || isPending}
-                        className="rounded-full px-5 py-2"
-                        style={{ backgroundColor: title.trim() ? NAVY : '#e2e8f0' }}
-                    >
-                        <Text style={{ color: title.trim() ? '#fff' : '#94a3b8', fontWeight: '700', fontSize: 14 }}>
-                            {isPending ? (eventToEdit ? 'Updating…' : 'Saving…') : (eventToEdit ? 'Update' : 'Save')}
-                        </Text>
-                    </TouchableOpacity>
+                    {!readOnly ? (
+                        <TouchableOpacity
+                            onPress={handleSave}
+                            disabled={!title.trim() || isPending}
+                            className="rounded-full px-5 py-2"
+                            style={{ backgroundColor: title.trim() ? NAVY : '#e2e8f0' }}
+                        >
+                            <Text style={{ color: title.trim() ? '#fff' : '#94a3b8', fontWeight: '700', fontSize: 14 }}>
+                                {isPending ? (eventToEdit ? 'Updating…' : 'Saving…') : (eventToEdit ? 'Update' : 'Save')}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View className="w-14" /> /* Balance the header */
+                    )}
                 </View>
 
                 <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
@@ -243,7 +300,8 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                             value={title}
                             onChangeText={setTitle}
                             className="text-[17px] font-bold text-[#1e293b]"
-                            autoFocus
+                            autoFocus={!readOnly}
+                            editable={!readOnly}
                         />
                     </View>
 
@@ -252,6 +310,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                         onSelect={setEventType}
                         customValue={customType}
                         onCustomChange={setCustomType}
+                        readOnly={readOnly}
                     />
 
                     {/* Description + Location */}
@@ -264,6 +323,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                                 value={description}
                                 onChangeText={setDesc}
                                 multiline
+                                editable={!readOnly}
                                 className="flex-1 ml-3 text-[15px] text-slate-700"
                                 style={{ minHeight: 60 }}
                             />
@@ -275,14 +335,15 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                                 placeholderTextColor="#cbd5e1"
                                 value={location}
                                 onChangeText={setLocation}
+                                editable={!readOnly}
                                 className="flex-1 ml-3 text-[15px] text-slate-700"
                             />
                         </View>
                     </View>
 
-                    {/* Department/Group Selection */}
-                    {groups.length > 0 && (
-                        <View className="bg-white rounded-[20px] px-4 py-4">
+                    {/* Department/Group Selection - Only shown if not pre-selected via context */}
+                    {groups.length > 0 && !initialGroupId && (
+                        <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
                             <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
                                 Department
                             </Text>
@@ -328,11 +389,88 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                         </View>
                     )}
 
+                    {/* Participant Selection - Always shown if group context exists */}
+                    {(selectedGroupId || initialGroupId) && (
+                        <View 
+                            className={`bg-white rounded-[20px] px-4 py-4 ${!initialGroupId ? 'mt-3' : ''}`}
+                            pointerEvents={readOnly ? 'none' : 'auto'}
+                        >
+                            {membersList.length > 0 && (
+                                <View>
+                                    <View className="flex-row justify-between items-center mb-3">
+                                        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                            Invite Participants
+                                        </Text>
+                                        {!readOnly && (
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    const allIds = membersList.map((m: any) => m.userId).filter(Boolean);
+                                                    setSelectedAttendeeIds(selectedAttendeeIds.length === allIds.length ? [] : allIds);
+                                                }}
+                                            >
+                                                <Text className="text-[11px] font-bold text-[#3b82f6]">
+                                                    {selectedAttendeeIds.length === membersList.length ? 'Clear All' : 'Select All'}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                                        {membersList.map((m: any) => {
+                                            const mId = m.userId || m.id;
+                                            const isSelected = selectedAttendeeIds.includes(mId);
+                                            return (
+                                                <TouchableOpacity
+                                                    key={mId}
+                                                    onPress={() => {
+                                                        setSelectedAttendeeIds(prev =>
+                                                            prev.includes(mId) ? prev.filter(id => id !== mId) : [...prev, mId]
+                                                        );
+                                                    }}
+                                                    disabled={readOnly}
+                                                    className="items-center"
+                                                >
+                                                    <View
+                                                        className="w-12 h-12 rounded-full items-center justify-center border-2"
+                                                        style={{
+                                                            backgroundColor: isSelected ? '#111827' : '#f8fafc',
+                                                            borderColor: isSelected ? '#3b82f6' : '#e2e8f0',
+                                                        }}
+                                                    >
+                                                        <Text className={`text-[12px] font-bold ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                                                            {m.email.slice(0, 2).toUpperCase()}
+                                                        </Text>
+                                                    </View>
+                                                    <Text className="text-[10px] text-slate-500 mt-1 font-medium" numberOfLines={1} style={{ width: 44, textAlign: 'center' }}>
+                                                        {m.email.split('@')[0]}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                </View>
+                            )}
+
+                            {/* Busy Members Warning */}
+                            {busyMembers.length > 0 && !readOnly && (
+                                <View className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex-row items-start gap-3">
+                                    <Bell size={16} color="#d97706" style={{ marginTop: 2 }} />
+                                    <View className="flex-1">
+                                        <Text className="text-[13px] font-bold text-amber-800">Busy Members Alert</Text>
+                                        <Text className="text-[12px] text-amber-700 mt-1">
+                                            {busyMembers.map(m => m.name).join(', ')} {busyMembers.length === 1 ? 'is' : 'are'} already busy at this time.
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
+                    )}
+
                     {/* All Day + Time */}
-                    <View className="bg-white rounded-[20px] overflow-hidden">
+                    <View className="bg-white rounded-[20px] overflow-hidden" pointerEvents={readOnly ? 'none' : 'auto'}>
                         <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-50">
                             <Text className="text-[15px] font-semibold text-[#1e293b]">All day</Text>
-                            <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ true: NAVY }} />
+                            {!readOnly && <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ true: NAVY }} />}
+                            {readOnly && <Text className="text-[15px] text-slate-400">{isAllDay ? 'Yes' : 'No'}</Text>}
                         </View>
 
                         {!isAllDay && (
@@ -340,6 +478,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                                 <TouchableOpacity
                                     className="flex-row items-center justify-between px-4 py-4 border-b border-slate-50"
                                     onPress={() => setShowStartPicker(true)}
+                                    disabled={readOnly}
                                 >
                                     <View className="flex-row items-center gap-3">
                                         <Clock size={16} color="#94a3b8" />
@@ -351,6 +490,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                                 <TouchableOpacity
                                     className="flex-row items-center justify-between px-4 py-4"
                                     onPress={() => setShowEndPicker(true)}
+                                    disabled={readOnly}
                                 >
                                     <View className="flex-row items-center gap-3">
                                         <Clock size={16} color="#94a3b8" />
@@ -363,7 +503,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                     </View>
 
                     {/* Priority */}
-                    <View className="bg-white rounded-[20px] px-4 py-4">
+                    <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
                         <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Priority</Text>
                         <View className="flex-row gap-2">
                             {PRIORITIES.map((p) => {
@@ -373,6 +513,7 @@ export function AddEventModal({ visible, onClose, eventToEdit }: Props) {
                                     <TouchableOpacity
                                         key={p}
                                         onPress={() => setPriority(p)}
+                                        disabled={readOnly}
                                         className="flex-1 py-2 rounded-full items-center"
                                         style={{ backgroundColor: active ? s.activeBg : s.bg }}
                                     >

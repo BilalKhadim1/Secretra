@@ -83,6 +83,7 @@ model User {
   groupMembers     GroupMember[]
   emailDrafts      EmailDraft[]
   emailTemplates   EmailTemplate[]
+  attendedEvents   Event[]             @relation("EventAttendees")
 
   createdAt        DateTime            @default(now()) @db.Timestamptz
   updatedAt        DateTime            @updatedAt @db.Timestamptz
@@ -139,6 +140,7 @@ model Event {
   color         String?
   tasks         Task[]
   reminders     Reminder[]
+  attendees     User[]        @relation("EventAttendees")
   createdAt     DateTime      @default(now()) @db.Timestamptz @map("created_at")
   updatedAt     DateTime      @updatedAt @db.Timestamptz @map("updated_at")
 

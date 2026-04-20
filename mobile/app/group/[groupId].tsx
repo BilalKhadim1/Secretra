@@ -16,6 +16,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { trpc } from '../../utils/trpc';
+import { AddEventModal } from '../../components/AddEventModal';
 
 const IconBack = ({ color = '#111827', size = 20 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -67,6 +68,12 @@ const IconEdit = ({ color = '#6b7280', size = 18 }) => (
   </Svg>
 );
 
+const IconLogOut = ({ color = '#ef4444', size = 18 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 const IconCamera = ({ color = '#6b7280', size = 18 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -74,20 +81,25 @@ const IconCamera = ({ color = '#6b7280', size = 18 }) => (
   </Svg>
 );
 
-const AvatarInitials = ({ email }: { email: string }) => {
+const AVATAR_COLORS = [
+  { bg: '#ede9fe', text: '#7c3aed' },
+  { bg: '#dbeafe', text: '#2563eb' },
+  { bg: '#dcfce7', text: '#16a34a' },
+  { bg: '#fce7f3', text: '#db2777' },
+  { bg: '#ffedd5', text: '#ea580c' },
+  { bg: '#e0f2fe', text: '#0284c7' },
+];
+
+const AvatarInitials = ({ email, size = 44 }: { email: string; size?: number }) => {
   const initials = email.slice(0, 2).toUpperCase();
-  const colors = [
-    { bg: '#ede9fe', text: '#7c3aed' },
-    { bg: '#dbeafe', text: '#2563eb' },
-    { bg: '#dcfce7', text: '#16a34a' },
-    { bg: '#fce7f3', text: '#db2777' },
-    { bg: '#ffedd5', text: '#ea580c' },
-    { bg: '#e0f2fe', text: '#0284c7' },
-  ];
-  const color = colors[email.charCodeAt(0) % colors.length];
+  const color = AVATAR_COLORS[email.charCodeAt(0) % AVATAR_COLORS.length];
+  const fontSize = size * 0.34;
   return (
-    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: color.text, fontWeight: '700', fontSize: 15 }}>{initials}</Text>
+    <View style={{
+      width: size, height: size, borderRadius: size / 2,
+      backgroundColor: color.bg, alignItems: 'center', justifyContent: 'center',
+    }}>
+      <Text style={{ color: color.text, fontWeight: '700', fontSize }}>{initials}</Text>
     </View>
   );
 };
@@ -111,45 +123,31 @@ type GroupWithMembers = {
   members: GroupMember[];
 };
 
+// ── Modals ──────────────────────────────────────────────
+
 const ConfirmRemoveModal = ({
-  visible,
-  member,
-  onClose,
-  onConfirm,
-  loading,
+  visible, member, onClose, onConfirm, loading,
 }: {
-  visible: boolean;
-  member: GroupMember | null;
-  onClose: () => void;
-  onConfirm: () => void;
-  loading: boolean;
+  visible: boolean; member: GroupMember | null; onClose: () => void;
+  onConfirm: () => void; loading: boolean;
 }) => (
   <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <Pressable
-      style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
-      onPress={onClose}
-    >
-      <Pressable style={{ backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360 }}>
-        <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+    <Pressable style={S.modalOverlay} onPress={onClose}>
+      <Pressable style={S.modalCard}>
+        <View style={[S.modalIconWrap, { backgroundColor: '#fee2e2' }]}>
           <IconRemoveUser size={22} color="#ef4444" />
         </View>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827', marginBottom: 8 }}>Remove member?</Text>
-        <Text style={{ color: '#6b7280', fontSize: 14, lineHeight: 20, marginBottom: 24 }}>
-          <Text style={{ fontWeight: '600', color: '#374151' }}>{member?.email}</Text> will be removed from this department.
+        <Text style={S.modalTitle}>Remove member?</Text>
+        <Text style={S.modalBody}>
+          <Text style={{ fontWeight: '600', color: '#374151' }}>{member?.email}</Text>
+          {' '}will be removed from this department.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ flex: 1, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center' }}
-          >
-            <Text style={{ color: '#374151', fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+        <View style={S.modalActions}>
+          <TouchableOpacity onPress={onClose} style={S.btnOutline}>
+            <Text style={S.btnOutlineText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onConfirm}
-            disabled={loading}
-            style={{ flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: '#ef4444', alignItems: 'center', opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Remove</Text>}
+          <TouchableOpacity onPress={onConfirm} disabled={loading} style={[S.btnDanger, loading && { opacity: 0.7 }]}>
+            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={S.btnDangerText}>Remove</Text>}
           </TouchableOpacity>
         </View>
       </Pressable>
@@ -158,44 +156,29 @@ const ConfirmRemoveModal = ({
 );
 
 const ConfirmLeaveModal = ({
-  visible,
-  groupName,
-  onClose,
-  onConfirm,
-  loading,
+  visible, groupName, onClose, onConfirm, loading,
 }: {
-  visible: boolean;
-  groupName: string;
-  onClose: () => void;
-  onConfirm: () => void;
-  loading: boolean;
+  visible: boolean; groupName: string; onClose: () => void;
+  onConfirm: () => void; loading: boolean;
 }) => (
   <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-    <Pressable
-      style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
-      onPress={onClose}
-    >
-      <Pressable style={{ backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '100%', maxWidth: 360 }}>
-        <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <IconRemoveUser size={22} color="#ef4444" />
+    <Pressable style={S.modalOverlay} onPress={onClose}>
+      <Pressable style={S.modalCard}>
+        <View style={[S.modalIconWrap, { backgroundColor: '#fee2e2' }]}>
+          <IconLogOut size={22} color="#ef4444" />
         </View>
-        <Text style={{ fontSize: 17, fontWeight: '800', color: '#111827', marginBottom: 8 }}>Leave department?</Text>
-        <Text style={{ color: '#6b7280', fontSize: 14, lineHeight: 20, marginBottom: 24 }}>
-          You will be removed from <Text style={{ fontWeight: '600', color: '#374151' }}>{groupName}</Text>. If you're the last member, the department will be deleted.
+        <Text style={S.modalTitle}>Leave department?</Text>
+        <Text style={S.modalBody}>
+          You will be removed from{' '}
+          <Text style={{ fontWeight: '600', color: '#374151' }}>{groupName}</Text>.
+          {' '}If you're the last member, the department will be deleted.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={{ flex: 1, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center' }}
-          >
-            <Text style={{ color: '#374151', fontWeight: '600', fontSize: 14 }}>Cancel</Text>
+        <View style={S.modalActions}>
+          <TouchableOpacity onPress={onClose} style={S.btnOutline}>
+            <Text style={S.btnOutlineText}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onConfirm}
-            disabled={loading}
-            style={{ flex: 1, paddingVertical: 13, borderRadius: 14, backgroundColor: '#ef4444', alignItems: 'center', opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Leave</Text>}
+          <TouchableOpacity onPress={onConfirm} disabled={loading} style={[S.btnDanger, loading && { opacity: 0.7 }]}>
+            {loading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={S.btnDangerText}>Leave</Text>}
           </TouchableOpacity>
         </View>
       </Pressable>
@@ -204,101 +187,69 @@ const ConfirmLeaveModal = ({
 );
 
 const EditGroupModal = ({
-  visible,
-  onClose,
-  name,
-  setName,
-  description,
-  setDescription,
-  imageUrl,
-  onPickImage,
-  onTakePhoto,
-  onSave,
-  loading,
+  visible, onClose, name, setName, description, setDescription,
+  imageUrl, onPickImage, onTakePhoto, onSave, loading,
 }: {
-  visible: boolean;
-  onClose: () => void;
-  name: string;
-  setName: (value: string) => void;
-  description: string;
-  setDescription: (value: string) => void;
-  imageUrl: string | null;
-  onPickImage: () => void;
-  onTakePhoto: () => void;
-  onSave: () => void;
-  loading: boolean;
+  visible: boolean; onClose: () => void; name: string; setName: (v: string) => void;
+  description: string; setDescription: (v: string) => void;
+  imageUrl: string | null; onPickImage: () => void; onTakePhoto: () => void;
+  onSave: () => void; loading: boolean;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={onClose}>
-      <Pressable style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 }} onPress={(e) => e.stopPropagation()}>
-        <View style={{ width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 24 }} />
-        <Text style={{ color: '#111827', fontSize: 20, fontWeight: '800', marginBottom: 6 }}>Edit Department</Text>
-        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 24 }}>Update department details and photo.</Text>
+    <Pressable style={S.sheetOverlay} onPress={onClose}>
+      <Pressable style={S.sheet} onPress={(e) => e.stopPropagation()}>
+        <View style={S.sheetHandle} />
+        <Text style={S.sheetTitle}>Edit Department</Text>
+        <Text style={S.sheetSubtitle}>Update department details and photo.</Text>
 
-        {/* Image Section */}
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <View style={{ alignItems: 'center', marginBottom: 24, marginTop: 8 }}>
           <View style={{ position: 'relative' }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#e5e7eb' }}>
+            <View style={S.groupAvatarWrap}>
               {imageUrl ? (
-                <Image source={{ uri: imageUrl }} style={{ width: 76, height: 76, borderRadius: 38 }} />
+                <Image source={{ uri: imageUrl }} style={S.groupAvatarImg} />
               ) : (
                 <IconUsersGroup size={32} color="#9ca3af" />
               )}
             </View>
-            <View style={{ position: 'absolute', bottom: 0, right: 0, flexDirection: 'row', gap: 4 }}>
-              <TouchableOpacity onPress={onPickImage} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' }}>
-                <IconCamera size={14} color="#fff" />
+            <View style={{ position: 'absolute', bottom: 0, right: -4, flexDirection: 'row', gap: 4 }}>
+              <TouchableOpacity onPress={onPickImage} style={S.miniIconBtn}>
+                <IconCamera size={13} color="#fff" />
               </TouchableOpacity>
-              <TouchableOpacity onPress={onTakePhoto} style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' }}>
-                <IconCamera size={14} color="#fff" />
+              <TouchableOpacity onPress={onTakePhoto} style={S.miniIconBtn}>
+                <IconCamera size={13} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        <View style={{ marginBottom: 16 }}>
-          <Text style={{ color: '#374151', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Department Name</Text>
-          <TextInput
-            placeholder="Department name"
-            placeholderTextColor="#9ca3af"
-            style={{ backgroundColor: '#f9fafb', borderWidth: 1.5, borderColor: '#e5e7eb', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, fontSize: 15, color: '#111827' }}
-            value={name}
-            onChangeText={setName}
-          />
-        </View>
+        <Text style={S.fieldLabel}>Department Name</Text>
+        <TextInput
+          placeholder="Department name"
+          placeholderTextColor="#9ca3af"
+          style={S.input}
+          value={name}
+          onChangeText={setName}
+        />
 
-        <View style={{ marginBottom: 24 }}>
-          <Text style={{ color: '#374151', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Description</Text>
-          <TextInput
-            placeholder="Brief description (optional)"
-            placeholderTextColor="#9ca3af"
-            multiline
-            style={{ backgroundColor: '#f9fafb', borderWidth: 1.5, borderColor: '#e5e7eb', paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, fontSize: 15, color: '#111827', minHeight: 80, textAlignVertical: 'top' }}
-            value={description}
-            onChangeText={setDescription}
-          />
-        </View>
+        <Text style={[S.fieldLabel, { marginTop: 14 }]}>Description</Text>
+        <TextInput
+          placeholder="Brief description (optional)"
+          placeholderTextColor="#9ca3af"
+          multiline
+          style={[S.input, { minHeight: 80, textAlignVertical: 'top', marginBottom: 24 }]}
+          value={description}
+          onChangeText={setDescription}
+        />
 
         <TouchableOpacity
           onPress={onSave}
           disabled={loading || !name.trim()}
-          style={{
-            backgroundColor: '#111827',
-            borderRadius: 16,
-            paddingVertical: 15,
-            alignItems: 'center',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: 8,
-            opacity: loading || !name.trim() ? 0.4 : 1,
-          }}
+          style={[S.btnPrimary, (loading || !name.trim()) && { opacity: 0.4 }]}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
+          {loading ? <ActivityIndicator color="#fff" size="small" /> : (
             <>
               <IconEdit color="#fff" size={16} />
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Save Changes</Text>
+              <Text style={S.btnPrimaryText}>Save Changes</Text>
             </>
           )}
         </TouchableOpacity>
@@ -308,60 +259,38 @@ const EditGroupModal = ({
 );
 
 const GroupMemberModal = ({
-  visible,
-  onClose,
-  email,
-  setEmail,
-  onAdd,
-  loading,
+  visible, onClose, email, setEmail, onAdd, loading,
 }: {
-  visible: boolean;
-  onClose: () => void;
-  email: string;
-  setEmail: (value: string) => void;
-  onAdd: () => void;
-  loading: boolean;
+  visible: boolean; onClose: () => void; email: string;
+  setEmail: (v: string) => void; onAdd: () => void; loading: boolean;
 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={onClose}>
-      <Pressable style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 }}>
-        <View style={{ width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 24 }} />
-        <Text style={{ color: '#111827', fontSize: 20, fontWeight: '800', marginBottom: 6 }}>Add member</Text>
-        <Text style={{ color: '#9ca3af', fontSize: 13, marginBottom: 24 }}>Invite someone to this department via their email.</Text>
+    <Pressable style={S.sheetOverlay} onPress={onClose}>
+      <Pressable style={S.sheet}>
+        <View style={S.sheetHandle} />
+        <Text style={S.sheetTitle}>Add member</Text>
+        <Text style={S.sheetSubtitle}>Invite someone via their email address.</Text>
 
-        <Text style={{ color: '#374151', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>Email address</Text>
-        <View style={{ marginBottom: 24, borderRadius: 14, backgroundColor: '#f9fafb', borderWidth: 1.5, borderColor: '#e5e7eb', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' }}>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="member@example.com"
-            placeholderTextColor="#9ca3af"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={{ color: '#111827', minHeight: 48, flex: 1, fontSize: 15 }}
-          />
-        </View>
+        <Text style={[S.fieldLabel, { marginBottom: 8 }]}>Email address</Text>
+        <TextInput
+          value={email}
+          onChangeText={setEmail}
+          placeholder="member@example.com"
+          placeholderTextColor="#9ca3af"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          style={[S.input, { marginBottom: 24 }]}
+        />
 
         <TouchableOpacity
           onPress={onAdd}
           disabled={loading || !email.trim()}
-          style={{
-            backgroundColor: '#111827',
-            borderRadius: 16,
-            paddingVertical: 15,
-            alignItems: 'center',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            gap: 8,
-            opacity: loading || !email.trim() ? 0.4 : 1,
-          }}
+          style={[S.btnPrimary, (loading || !email.trim()) && { opacity: 0.4 }]}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
+          {loading ? <ActivityIndicator color="#fff" size="small" /> : (
             <>
               <IconPlus color="#fff" size={16} />
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>Add member</Text>
+              <Text style={S.btnPrimaryText}>Add member</Text>
             </>
           )}
         </TouchableOpacity>
@@ -371,82 +300,59 @@ const GroupMemberModal = ({
 );
 
 const MemberCalendarModal = ({
-  visible,
-  member,
-  onClose,
-  events,
-  loading,
+  visible, member, onClose, events, loading,
 }: {
-  visible: boolean;
-  member: GroupMember | null;
-  onClose: () => void;
-  events: any[];
-  loading: boolean;
+  visible: boolean; member: GroupMember | null; onClose: () => void;
+  events: any[]; loading: boolean;
 }) => {
-  const formatTime = (date: string) => {
+  const fmt = (date: string, type: 'time' | 'date') => {
     const d = new Date(date);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return type === 'time'
+      ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }} onPress={onClose}>
-        <Pressable
-          style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '85%' }}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={{ width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 12 }}>
-            {member && <AvatarInitials email={member.email} />}
+      <Pressable style={S.sheetOverlay} onPress={onClose}>
+        <Pressable style={[S.sheet, { paddingBottom: 36 }]} onPress={(e) => e.stopPropagation()}>
+          <View style={S.sheetHandle} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+            {member && <AvatarInitials email={member.email} size={46} />}
             <View style={{ flex: 1 }}>
-              <Text style={{ color: '#111827', fontSize: 18, fontWeight: '800' }}>{member?.email}</Text>
-              <Text style={{ color: '#9ca3af', fontSize: 13 }}>Availability</Text>
+              <Text style={{ color: '#111827', fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{member?.email}</Text>
+              <Text style={{ color: '#9ca3af', fontSize: 12, marginTop: 2 }}>Availability</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 20, color: '#6b7280' }}>×</Text>
+            <TouchableOpacity onPress={onClose} style={S.closeBtn}>
+              <Text style={{ fontSize: 18, color: '#6b7280', lineHeight: 22 }}>×</Text>
             </TouchableOpacity>
           </View>
 
           {loading ? (
             <ActivityIndicator color="#111827" size="large" style={{ marginVertical: 32 }} />
           ) : events.length === 0 ? (
-            <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-              <View style={{ width: 64, height: 64, borderRadius: 16, backgroundColor: '#ecfdf5', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                <IconCalendar color="#10b981" size={32} />
+            <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+              <View style={[S.emptyIconWrap, { backgroundColor: '#ecfdf5' }]}>
+                <IconCalendar color="#10b981" size={28} />
               </View>
-              <Text style={{ color: '#111827', fontSize: 14, fontWeight: '700', marginBottom: 4 }}>No events scheduled</Text>
-              <Text style={{ color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>This member is free and available</Text>
+              <Text style={S.emptyTitle}>No events scheduled</Text>
+              <Text style={S.emptySubtitle}>This member is free and available</Text>
             </View>
           ) : (
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={true}>
-              <View style={{ gap: 10 }}>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 8 }}>
                 {events.map((event: any, idx: number) => (
-                  <View
-                    key={idx}
-                    style={{
-                      backgroundColor: '#f9fafb',
-                      borderRadius: 14,
-                      padding: 14,
-
-                    }}
-                  >
-                    <Text style={{ color: '#111827', fontSize: 13, fontWeight: '700', marginBottom: 4 }} numberOfLines={1}>
-                      {event.title}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <IconCalendar color="#6b7280" size={14} />
-                      <Text style={{ color: '#6b7280', fontSize: 12 }}>
-                        {formatDate(event.startAt)} • {formatTime(event.startAt)} - {formatTime(event.endAt)}
+                  <View key={idx} style={S.eventCard}>
+                    <View style={S.eventDot} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={S.eventTitle} numberOfLines={1}>{event.title}</Text>
+                      <Text style={S.eventMeta}>
+                        {fmt(event.startAt, 'date')} · {fmt(event.startAt, 'time')} – {fmt(event.endAt, 'time')}
                       </Text>
+                      {event.location && (
+                        <Text style={S.eventLocation}>📍 {event.location}</Text>
+                      )}
                     </View>
-                    {event.location && (
-                      <Text style={{ color: '#9ca3af', fontSize: 11, marginTop: 6 }}>📍 {event.location}</Text>
-                    )}
                   </View>
                 ))}
               </View>
@@ -458,24 +364,25 @@ const MemberCalendarModal = ({
   );
 };
 
+// ── Empty state ──────────────────────────────────────────
+
 const EmptyMembers = ({ onAdd }: { onAdd: () => void }) => (
-  <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 36, alignItems: 'center', borderWidth: 1.5, borderColor: '#f3f4f6', borderStyle: 'dashed' }}>
-    <View style={{ width: 72, height: 72, borderRadius: 24, backgroundColor: '#f9fafb', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-      <IconUsersGroup size={36} color="#d1d5db" />
+  <View style={S.emptyState}>
+    <View style={[S.emptyIconWrap, { width: 64, height: 64, borderRadius: 20, backgroundColor: '#f3f4f6' }]}>
+      <IconUsersGroup size={30} color="#d1d5db" />
     </View>
-    <Text style={{ color: '#111827', fontSize: 16, fontWeight: '800', marginBottom: 6 }}>No members yet</Text>
-    <Text style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 24, maxWidth: 220 }}>
+    <Text style={[S.emptyTitle, { marginBottom: 6 }]}>No members yet</Text>
+    <Text style={[S.emptySubtitle, { marginBottom: 24, maxWidth: 220, textAlign: 'center' }]}>
       This department is empty. Add members using their account email.
     </Text>
-    <TouchableOpacity
-      onPress={onAdd}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#111827', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14 }}
-    >
+    <TouchableOpacity onPress={onAdd} style={S.emptyAddBtn}>
       <IconPlus color="#fff" size={14} />
       <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>Add first member</Text>
     </TouchableOpacity>
   </View>
 );
+
+// ── Main screen ──────────────────────────────────────────
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -495,8 +402,8 @@ export default function GroupDetailPage() {
   const [memberToRemove, setMemberToRemove] = useState<GroupMember | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [selectedMember, setSelectedMember] = useState<GroupMember | null>(null);
-  const [memberCalendarEvents, setMemberCalendarEvents] = useState<any[]>([]);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [editGroupName, setEditGroupName] = useState('');
   const [editGroupDescription, setEditGroupDescription] = useState('');
   const [editGroupImageUrl, setEditGroupImageUrl] = useState<string | null>(null);
@@ -509,10 +416,7 @@ export default function GroupDetailPage() {
     const end = new Date(now);
     start.setDate(start.getDate() - 7);
     end.setDate(end.getDate() + 30);
-    return {
-      startDate: start.toISOString(),
-      endDate: end.toISOString(),
-    };
+    return { startDate: start.toISOString(), endDate: end.toISOString() };
   }, []);
 
   const getTeamMemberCalendar = trpc.calendar.getTeamMemberCalendar.useQuery(
@@ -564,39 +468,18 @@ export default function GroupDetailPage() {
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant permission to access your photos');
-      return;
-    }
-
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Please grant photo library access'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.8,
     });
-
-    if (!result.canceled) {
-      setEditGroupImageUrl(result.assets[0].uri);
-    }
+    if (!result.canceled) setEditGroupImageUrl(result.assets[0].uri);
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant permission to access your camera');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled) {
-      setEditGroupImageUrl(result.assets[0].uri);
-    }
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Please grant camera access'); return; }
+    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+    if (!result.canceled) setEditGroupImageUrl(result.assets[0].uri);
   };
 
   const handleAddMember = () => {
@@ -627,310 +510,448 @@ export default function GroupDetailPage() {
     });
   };
 
+  // ── Shared nav bar for loading/error states ──
+  const NavBar = () => (
+    <View style={S.navBar}>
+      <TouchableOpacity onPress={() => router.back()} style={S.navBtn}>
+        <IconBack size={18} color="#111827" />
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (isLoading) return (
+    <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
+      <NavBar />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#111827" />
+      </View>
+    </View>
+  );
+
+  if (isError || !group) return (
+    <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
+      <NavBar />
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View style={[S.emptyIconWrap, { backgroundColor: '#fee2e2', width: 64, height: 64, borderRadius: 20 }]}>
+          <IconUser color="#ef4444" size={28} />
+        </View>
+        <Text style={[S.emptyTitle, { marginBottom: 6 }]}>Failed to load department</Text>
+        <Text style={[S.emptySubtitle, { textAlign: 'center', marginBottom: 20 }]}>Something went wrong. Go back and try again.</Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#111827', borderRadius: 14 }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Go back</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
       <StatusBar barStyle="dark-content" backgroundColor="#f0fdf4" />
 
+      {/* ── Modals ── */}
       <GroupMemberModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        email={memberEmail}
-        setEmail={setMemberEmail}
-        onAdd={handleAddMember}
-        loading={addGroupMember.isPending}
+        visible={showAddModal} onClose={() => setShowAddModal(false)}
+        email={memberEmail} setEmail={setMemberEmail}
+        onAdd={handleAddMember} loading={addGroupMember.isPending}
       />
-
+      <AddEventModal visible={showAddEventModal} onClose={() => setShowAddEventModal(false)} initialGroupId={groupId} />
       <ConfirmRemoveModal
-        visible={!!memberToRemove}
-        member={memberToRemove}
-        onClose={() => setMemberToRemove(null)}
-        onConfirm={handleConfirmRemove}
+        visible={!!memberToRemove} member={memberToRemove}
+        onClose={() => setMemberToRemove(null)} onConfirm={handleConfirmRemove}
         loading={removeGroupMember.isPending}
       />
-
       <ConfirmLeaveModal
-        visible={showLeaveConfirm}
-        groupName={group?.name || 'this department'}
+        visible={showLeaveConfirm} groupName={group?.name || 'this department'}
         onClose={() => setShowLeaveConfirm(false)}
         onConfirm={() => leaveGroup.mutate({ groupId })}
         loading={leaveGroup.isPending}
       />
-
       <MemberCalendarModal
-        visible={!!selectedMember}
-        member={selectedMember}
-        onClose={() => {
-          setSelectedMember(null);
-          setMemberCalendarEvents([]);
-        }}
+        visible={!!selectedMember} member={selectedMember}
+        onClose={() => setSelectedMember(null)}
         events={getTeamMemberCalendar.data || []}
         loading={getTeamMemberCalendar.isLoading}
       />
-
       <EditGroupModal
-        visible={showEditGroupModal}
-        onClose={() => setShowEditGroupModal(false)}
-        name={editGroupName}
-        setName={setEditGroupName}
-        description={editGroupDescription}
-        setDescription={setEditGroupDescription}
-        imageUrl={editGroupImageUrl}
-        onPickImage={pickImage}
-        onTakePhoto={takePhoto}
-        onSave={handleSaveGroup}
-        loading={updateGroup.isPending}
+        visible={showEditGroupModal} onClose={() => setShowEditGroupModal(false)}
+        name={editGroupName} setName={setEditGroupName}
+        description={editGroupDescription} setDescription={setEditGroupDescription}
+        imageUrl={editGroupImageUrl} onPickImage={pickImage} onTakePhoto={takePhoto}
+        onSave={handleSaveGroup} loading={updateGroup.isPending}
       />
 
-      {isLoading ? (
-        <>
-          <View style={{ backgroundColor: '#fff', paddingTop: 52, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <IconBack size={16} />
-            </TouchableOpacity>
-          </View>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color="#111827" />
-          </View>
-        </>
-      ) : isError || !group ? (
-        <>
-          <View style={{ backgroundColor: '#fff', paddingTop: 52, paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' }}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <IconBack size={16} />
-            </TouchableOpacity>
-          </View>
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-            <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-              <IconUser color="#ef4444" size={28} />
-            </View>
-            <Text style={{ color: '#111827', fontSize: 16, fontWeight: '800', textAlign: 'center' }}>Failed to load department</Text>
-            <Text style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>Something went wrong. Go back and try again.</Text>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ marginTop: 20, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: '#111827', borderRadius: 14 }}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Go back</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
 
-          {/* ── Hero: back button + avatar on same row ── */}
-          <View
-            style={{
-              backgroundColor: '#f0fdf4',
-              paddingTop: 52,
-              paddingBottom: 32,
-              paddingHorizontal: 24,
-              alignItems: 'center',
-              borderBottomWidth: 1,
-              borderBottomColor: '#d1fae5',
-            }}
-          >
-            {/* Top row: back button | edit button (if admin) | centered avatar | spacer */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: 14 }}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
-                  backgroundColor: 'rgba(255,255,255,0.75)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(0,0,0,0.06)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <IconBack size={16} color="#111827" />
-              </TouchableOpacity>
-
+        {/* ── Hero ── */}
+        <View style={S.hero}>
+          {/* Top nav row */}
+          <View style={S.heroNav}>
+            <TouchableOpacity onPress={() => router.back()} style={S.heroNavBtn}>
+              <IconBack size={18} color="#374151" />
+            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
               {isAdmin && (
-                <TouchableOpacity
-                  onPress={handleOpenEditGroup}
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 17,
-                    backgroundColor: 'rgba(255,255,255,0.75)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(0,0,0,0.06)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginLeft: 8,
-                  }}
-                >
-                  <IconEdit size={16} color="#111827" />
+                <TouchableOpacity onPress={handleOpenEditGroup} style={S.heroNavBtn}>
+                  <IconEdit size={16} color="#374151" />
                 </TouchableOpacity>
               )}
-
-              {/* Avatar — centered between back button and spacer */}
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <View
-                  style={{
-                    width: 70,
-                    height: 70,
-                    borderRadius: 42,
-                    backgroundColor: '#dcfce7',
-                    borderWidth: 3,
-                    borderColor: '#fff',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 2 },
-                    shadowOpacity: 0.08,
-                    shadowRadius: 8,
-                    elevation: 3,
-                  }}
-                >
-                  {group?.imageUrl ? (
-                    <Image
-                      source={{ uri: group.imageUrl }}
-                      style={{ width: 64, height: 64, borderRadius: 32 }}
-                    />
-                  ) : (
-                    <IconUsersGroup size={40} color="#16a34a" />
-                  )}
-                </View>
-              </View>
-
-              {/* Right spacer — same width as back button to keep avatar truly centered */}
-              <View style={{ width: 34 }} />
+              <TouchableOpacity onPress={() => setShowLeaveConfirm(true)} style={[S.heroNavBtn, { borderColor: 'rgba(239,68,68,0.2)' }]}>
+                <IconLogOut size={16} color="#ef4444" />
+              </TouchableOpacity>
             </View>
-
-            {/* Group name */}
-            <Text style={{ fontSize: 22, fontWeight: '800', color: '#111827', letterSpacing: -0.5, marginBottom: 4, textAlign: 'center' }}>
-              {group.name}
-            </Text>
-
-            {/* Subtitle: type + member count */}
-            <Text style={{ fontSize: 13, color: '#6b7280', marginBottom: group.description ? 14 : 0 }}>
-              Department · {group.members.length} {group.members.length === 1 ? 'member' : 'members'}
-            </Text>
-
-            {/* Description pill */}
-            {group.description ? (
-              <View
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.75)',
-                  borderRadius: 14,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderWidth: 1,
-                  borderColor: '#bbf7d0',
-                  maxWidth: 300,
-                }}
-              >
-                <Text style={{ color: '#374151', fontSize: 13, lineHeight: 20, textAlign: 'center' }}>
-                  {group.description}
-                </Text>
-              </View>
-            ) : null}
           </View>
 
-          {/* ── Members section ── */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
-            {/* Members header row */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#6b7280', letterSpacing: 1, textTransform: 'uppercase' }}>
-                Members · {group.members.length}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                {isAdmin && (
-                  <TouchableOpacity
-                    onPress={() => setShowAddModal(true)}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#111827', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12 }}
-                  >
-                    <IconPlus color="#fff" size={13} />
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>Add member</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  onPress={() => setShowLeaveConfirm(true)}
-                  style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#ef4444', backgroundColor: '#fff5f5' }}
-                >
-                  <Text style={{ color: '#ef4444', fontWeight: '700', fontSize: 12 }}>Leave</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Members list or empty state */}
-            {group.members.length === 0 ? (
-              isAdmin ? (
-                <EmptyMembers onAdd={() => setShowAddModal(true)} />
-              ) : (
-                <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 26, alignItems: 'center', borderWidth: 1.5, borderColor: '#f3f4f6' }}>
-                  <Text style={{ color: '#111827', fontSize: 16, fontWeight: '800', marginBottom: 8 }}>No members yet</Text>
-                  <Text style={{ color: '#9ca3af', fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
-                    This department has no members. Only the group creator can invite new members.
-                  </Text>
-                </View>
-              )
+          {/* Avatar */}
+          <View style={S.heroAvatarWrap}>
+            {group?.imageUrl ? (
+              <Image source={{ uri: group.imageUrl }} style={S.heroAvatarImg} />
             ) : (
-              <View style={{ gap: 10 }}>
-                {group.members.map((member: GroupMember) => {
-                  const memberIsActive =
-                    member.status === 'accepted' ||
-                    member.status == null ||
-                    !!member.user?.id ||
-                    !!member.userId ||
-                    member.email.toLowerCase() === currentUser?.email?.toLowerCase();
-
-                  const memberStatusLabel = member.status === 'pending' ? 'Pending invite' : 'Active user';
-
-                  return (
-                    <TouchableOpacity
-                      key={member.id}
-                      onPress={() => memberIsActive && setSelectedMember(member)}
-                      activeOpacity={memberIsActive ? 0.7 : 1}
-                      style={{
-                        backgroundColor: '#fff',
-                        borderRadius: 18,
-                        padding: 14,
-                        borderWidth: 1,
-                        borderColor: memberIsActive ? '#e0f2fe' : '#f3f4f6',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 12,
-                      }}
-                    >
-                      <AvatarInitials email={member.email} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#111827', fontSize: 14, fontWeight: '700' }} numberOfLines={1}>{member.email}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 5 }}>
-                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: memberIsActive ? '#22c55e' : '#e5e7eb' }} />
-                          <Text style={{ color: '#9ca3af', fontSize: 11 }}>{memberStatusLabel}</Text>
-                        </View>
-                      </View>
-                      {isAdmin && member.email !== currentUser?.email && (
-                        <TouchableOpacity
-                          onPress={() => setMemberToRemove(member)}
-                          style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecaca', alignItems: 'center', justifyContent: 'center' }}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <IconRemoveUser size={15} color="#ef4444" />
-                        </TouchableOpacity>
-                      )}
-                      {memberIsActive && !isAdmin && (
-                        <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: '#ecfdf5', alignItems: 'center', justifyContent: 'center' }}>
-                          <IconCalendar color="#10b981" size={16} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <IconUsersGroup size={38} color="#16a34a" />
             )}
           </View>
-        </ScrollView>
-      )}
+
+          {/* Text */}
+          <Text style={S.heroName}>{group.name}</Text>
+          <Text style={S.heroMeta}>
+            Department · {group.members.length} {group.members.length === 1 ? 'member' : 'members'}
+          </Text>
+          {group.description ? (
+            <View style={S.heroPill}>
+              <Text style={S.heroPillText}>{group.description}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* ── Members section ── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 20 }}>
+
+          {/* Section header */}
+          <View style={S.sectionHeader}>
+            <Text style={S.sectionLabel}>MEMBERS · {group.members.length}</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={() => setShowAddEventModal(true)} style={S.pillBtnDark}>
+                <IconCalendar color="#fff" size={13} />
+                <Text style={S.pillBtnDarkText}>Schedule</Text>
+              </TouchableOpacity>
+              {isAdmin && (
+                <TouchableOpacity onPress={() => setShowAddModal(true)} style={S.pillBtnLight}>
+                  <IconPlus color="#111827" size={13} />
+                  <Text style={S.pillBtnLightText}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Members list */}
+          {group.members.length === 0 ? (
+            isAdmin ? (
+              <EmptyMembers onAdd={() => setShowAddModal(true)} />
+            ) : (
+              <View style={S.emptyState}>
+                <Text style={S.emptyTitle}>No members yet</Text>
+                <Text style={S.emptySubtitle}>Only the group creator can invite new members.</Text>
+              </View>
+            )
+          ) : (
+            <View style={S.memberList}>
+              {group.members.map((member: GroupMember, index: number) => {
+                const memberIsActive =
+                  member.status === 'accepted' || member.status == null ||
+                  !!member.user?.id || !!member.userId ||
+                  member.email.toLowerCase() === currentUser?.email?.toLowerCase();
+                const isPending = member.status === 'pending';
+                const isMe = member.email.toLowerCase() === currentUser?.email?.toLowerCase();
+                const isLast = index === group.members.length - 1;
+
+                return (
+                  <TouchableOpacity
+                    key={member.id}
+                    onPress={() => memberIsActive && setSelectedMember(member)}
+                    activeOpacity={memberIsActive ? 0.6 : 1}
+                    style={[
+                      S.memberRow,
+                      !isLast && S.memberRowDivider,
+                    ]}
+                  >
+                    <AvatarInitials email={member.email} size={42} />
+
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={S.memberEmail} numberOfLines={1}>{member.email}</Text>
+                        {isMe && (
+                          <View style={S.meBadge}>
+                            <Text style={S.meBadgeText}>you</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                        <View style={[S.statusDot, { backgroundColor: isPending ? '#d1d5db' : '#22c55e' }]} />
+                        <Text style={S.memberStatus}>{isPending ? 'Pending invite' : 'Active'}</Text>
+                      </View>
+                    </View>
+
+                    {/* Right action */}
+                    {isAdmin && !isMe ? (
+                      <TouchableOpacity
+                        onPress={() => setMemberToRemove(member)}
+                        style={S.removeBtn}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <IconRemoveUser size={15} color="#ef4444" />
+                      </TouchableOpacity>
+                    ) : memberIsActive && !isAdmin ? (
+                      <View style={S.calendarBadge}>
+                        <IconCalendar color="#10b981" size={15} />
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
     </View>
   );
 }
+
+// ── Styles ────────────────────────────────────────────────
+
+const S = {
+  // Nav
+  navBar: {
+    backgroundColor: '#fff',
+    paddingTop: 52,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  } as const,
+  navBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+
+  // Hero
+  hero: {
+    backgroundColor: '#f0fdf4',
+    paddingTop: 52,
+    paddingBottom: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center' as const,
+    borderBottomWidth: 1,
+    borderBottomColor: '#d1fae5',
+  },
+  heroNav: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    width: '100%' as any,
+    marginBottom: 20,
+  },
+  heroNavBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  heroAvatarWrap: {
+    width: 76, height: 76, borderRadius: 38,
+    backgroundColor: '#dcfce7',
+    borderWidth: 3, borderColor: '#fff',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+    marginBottom: 14,
+  },
+  heroAvatarImg: { width: 70, height: 70, borderRadius: 35 },
+  heroName: {
+    fontSize: 22, fontWeight: '800' as const, color: '#111827',
+    letterSpacing: -0.4, marginBottom: 4, textAlign: 'center' as const,
+  },
+  heroMeta: { fontSize: 13, color: '#6b7280', marginBottom: 12 },
+  heroPill: {
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 9,
+    borderWidth: 1, borderColor: '#bbf7d0', maxWidth: 300,
+  },
+  heroPillText: { color: '#374151', fontSize: 13, lineHeight: 20, textAlign: 'center' as const },
+
+  // Section
+  sectionHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 12,
+  },
+  sectionLabel: {
+    fontSize: 11, fontWeight: '700' as const, color: '#9ca3af',
+    letterSpacing: 0.8,
+  },
+  pillBtnDark: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    gap: 5, backgroundColor: '#111827',
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10,
+  },
+  pillBtnDarkText: { color: '#fff', fontWeight: '700' as const, fontSize: 12 },
+  pillBtnLight: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    gap: 5, backgroundColor: '#fff',
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10,
+    borderWidth: 1, borderColor: '#e5e7eb',
+  },
+  pillBtnLightText: { color: '#111827', fontWeight: '700' as const, fontSize: 12 },
+
+  // Member list — card wrapping all rows
+  memberList: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    overflow: 'hidden' as const,
+  },
+  memberRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+  },
+  memberRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  memberEmail: {
+    color: '#111827', fontSize: 14, fontWeight: '600' as const,
+    flexShrink: 1,
+  },
+  memberStatus: { color: '#9ca3af', fontSize: 12 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  meBadge: {
+    backgroundColor: '#eff6ff', borderRadius: 6,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  meBadgeText: { color: '#3b82f6', fontSize: 10, fontWeight: '700' as const },
+  removeBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#fecaca',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  calendarBadge: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+
+  // Empty states
+  emptyState: {
+    backgroundColor: '#fff', borderRadius: 18,
+    padding: 32, alignItems: 'center' as const,
+    borderWidth: 1, borderColor: '#f0f0f0',
+  },
+  emptyIconWrap: {
+    width: 56, height: 56, borderRadius: 16,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+    marginBottom: 12,
+  },
+  emptyTitle: { color: '#111827', fontSize: 15, fontWeight: '700' as const },
+  emptySubtitle: { color: '#9ca3af', fontSize: 13, lineHeight: 20, marginTop: 4 },
+  emptyAddBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const,
+    gap: 7, backgroundColor: '#111827',
+    paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12,
+  },
+
+  // Modal base
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center' as const, alignItems: 'center' as const, padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#fff', borderRadius: 24, padding: 24, width: '100%' as any, maxWidth: 360,
+  },
+  modalIconWrap: {
+    width: 50, height: 50, borderRadius: 15,
+    alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 14,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '800' as const, color: '#111827', marginBottom: 8 },
+  modalBody: { color: '#6b7280', fontSize: 14, lineHeight: 21, marginBottom: 24 },
+  modalActions: { flexDirection: 'row' as const, gap: 10 },
+  btnOutline: {
+    flex: 1, paddingVertical: 13, borderRadius: 13,
+    borderWidth: 1.5, borderColor: '#e5e7eb', alignItems: 'center' as const,
+  },
+  btnOutlineText: { color: '#374151', fontWeight: '600' as const, fontSize: 14 },
+  btnDanger: {
+    flex: 1, paddingVertical: 13, borderRadius: 13,
+    backgroundColor: '#ef4444', alignItems: 'center' as const,
+  },
+  btnDangerText: { color: '#fff', fontWeight: '700' as const, fontSize: 14 },
+
+  // Sheet (bottom modal)
+  sheetOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const,
+  },
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    padding: 24, paddingBottom: 44,
+  },
+  sheetHandle: {
+    width: 36, height: 4, backgroundColor: '#e5e7eb',
+    borderRadius: 2, alignSelf: 'center' as const, marginBottom: 22,
+  },
+  sheetTitle: { color: '#111827', fontSize: 20, fontWeight: '800' as const, marginBottom: 4 },
+  sheetSubtitle: { color: '#9ca3af', fontSize: 13, marginBottom: 22 },
+
+  // Form
+  fieldLabel: {
+    color: '#374151', fontSize: 11, fontWeight: '700' as const,
+    letterSpacing: 0.7, textTransform: 'uppercase' as const, marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f9fafb', borderWidth: 1.5, borderColor: '#e5e7eb',
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 13,
+    fontSize: 15, color: '#111827',
+  },
+  btnPrimary: {
+    backgroundColor: '#111827', borderRadius: 15, paddingVertical: 15,
+    alignItems: 'center' as const, flexDirection: 'row' as const,
+    justifyContent: 'center' as const, gap: 8,
+  },
+  btnPrimaryText: { color: '#fff', fontWeight: '700' as const, fontSize: 15 },
+
+  // Group avatar in edit modal
+  groupAvatarWrap: {
+    width: 78, height: 78, borderRadius: 39,
+    backgroundColor: '#f3f4f6', borderWidth: 1.5, borderColor: '#e5e7eb',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  groupAvatarImg: { width: 74, height: 74, borderRadius: 37 },
+  miniIconBtn: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: '#111827',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+
+  // Calendar event card
+  eventCard: {
+    flexDirection: 'row' as const, alignItems: 'flex-start' as const,
+    backgroundColor: '#f9fafb', borderRadius: 13, padding: 13, gap: 10,
+  },
+  eventDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: '#111827',
+    marginTop: 4, flexShrink: 0,
+  },
+  eventTitle: { color: '#111827', fontSize: 13, fontWeight: '700' as const, marginBottom: 4 },
+  eventMeta: { color: '#6b7280', fontSize: 12 },
+  eventLocation: { color: '#9ca3af', fontSize: 11, marginTop: 5 },
+
+  // Close button
+  closeBtn: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+};
