@@ -1,9 +1,7 @@
 // @ts-nocheck
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { PrismaClient } from '@ps/db';
-
-const prisma = new PrismaClient();
+import prisma from '../shared/prisma';
 
 export const noteRouter = router({
   // Get all notes for the current user

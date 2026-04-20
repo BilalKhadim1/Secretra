@@ -1,8 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { PrismaClient, TaskPriority, TaskStatus } from '@ps/db';
-
-const prisma = new PrismaClient();
+import { TaskPriority, TaskStatus } from '@ps/db';
+import prisma from '../shared/prisma';
 
 export const taskRouter = router({
   // Get all tasks for the current user

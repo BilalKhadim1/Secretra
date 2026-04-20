@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { PrismaClient, EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
-
-const prisma = new PrismaClient();
+import { EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
+import prisma from '../shared/prisma';
+import { emitSignal } from '../socket';
 
 // Explicitly define schemas to help TS inference in some IDE environments
 const eventInputSchema = z.object({
@@ -212,7 +212,7 @@ export const calendarRouter = router({
         throw new Error(`Conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} already busy during this time.`);
       }
 
-      return prisma.event.create({
+      const event = await prisma.event.create({
         data: {
           ...rest,
           userId: ctx.user.id,
@@ -223,7 +223,17 @@ export const calendarRouter = router({
             ? { connect: attendeeIds.map((id) => ({ id })) }
             : undefined,
         } as any,
+        include: { attendees: { select: { id: true } } },
       });
+
+      // Signal attendees and group
+      if (groupId) await emitSignal({ groupId }, 'calendar_update');
+      for (const a of (event.attendees || [])) {
+        await emitSignal({ userId: (a as any).id }, 'calendar_update');
+      }
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      return event;
     }),
 
   // Update an existing event
@@ -279,7 +289,7 @@ export const calendarRouter = router({
         throw new Error(`Update conflict! ${namesStr} ${busyNames.length > 1 ? 'are' : 'is'} busy during this time.`);
       }
 
-      return prisma.event.update({
+      const updatedEvent = await prisma.event.update({
         where: { id },
         data: {
           ...data,
@@ -290,19 +300,51 @@ export const calendarRouter = router({
             ? { set: attendeeIds.map((aid) => ({ id: aid })) }
             : undefined,
         } as any,
+        include: { attendees: { select: { id: true } } },
       });
+
+      // Signal attendees and group
+      if (groupId) await emitSignal({ groupId }, 'calendar_update');
+      if (existing.groupId && existing.groupId !== groupId) {
+        await emitSignal({ groupId: existing.groupId }, 'calendar_update');
+      }
+      
+      const allAttendeeIds = new Set([
+        ...existing.attendees.map((a: any) => a.id),
+        ...(updatedEvent.attendees?.map((a: any) => a.id) || [])
+      ]);
+      
+      for (const uid of allAttendeeIds) {
+        await emitSignal({ userId: uid as string }, 'calendar_update');
+      }
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      return updatedEvent;
     }),
 
   // Delete an event
   deleteEvent: protectedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      return prisma.event.deleteMany({
-        where: {
-          id: input.id,
-          userId: ctx.user.id,
-        },
+      const event = await prisma.event.findFirst({
+        where: { id: input.id, userId: ctx.user.id },
+        include: { attendees: { select: { id: true } } },
       });
+
+      if (!event) return;
+
+      const result = await prisma.event.deleteMany({
+        where: { id: input.id, userId: ctx.user.id },
+      });
+
+      // Signal attendees and group
+      if (event.groupId) await emitSignal({ groupId: event.groupId }, 'calendar_update');
+      for (const a of (event.attendees || [])) {
+        await emitSignal({ userId: (a as any).id }, 'calendar_update');
+      }
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+
+      return result;
     }),
 
   // Check availability for all members of a group within a time range

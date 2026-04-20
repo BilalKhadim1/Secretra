@@ -2,10 +2,8 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server'; 
 
 import { router, publicProcedure, protectedProcedure } from '../trpcBase';
-import { PrismaClient } from '@ps/db';
+import prisma from '../shared/prisma';
 import { AuthService } from '../services/auth.service';
-
-const prisma = new PrismaClient();
 
 export const userRouter = router({
   // Register a new user

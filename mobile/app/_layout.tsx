@@ -10,6 +10,7 @@ import { httpBatchLink } from '@trpc/client';
 import Constants from 'expo-constants';
 import { trpc } from '../utils/trpc';
 import { getStorageItem } from '../utils/storage';
+import { SocketProvider } from '../context/SocketContext';
 
 NativeWindStyleSheet.setOutput({
   default: "native",
@@ -35,7 +36,7 @@ const getBaseUrl = () => {
   const localhost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
   const debuggerHost = Constants.expoConfig?.hostUri;
   const address = debuggerHost?.split(':')[0];
-  
+
   if (!address) return `http://${localhost}:4000/trpc`;
   return `http://${address}:4000/trpc`;
 };
@@ -77,11 +78,13 @@ export default function RootLayout() {
   }
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </View>
+    <trpc.Provider client={trpcClient} queryClient={queryClient as any}>
+      <QueryClientProvider client={queryClient as any}>
+        <SocketProvider>
+          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        </SocketProvider>
       </QueryClientProvider>
     </trpc.Provider>
   );

@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { PrismaClient, GroupMemberStatus } from '@ps/db';
-
-const prisma = new PrismaClient();
+import { TRPCError } from '@trpc/server';
+import { GroupMemberStatus } from '@ps/db';
+import prisma from '../shared/prisma';
+import { emitSignal } from '../socket';
 
 const groupInputSchema = z.object({
   name: z.string().min(1),
@@ -49,7 +50,10 @@ export const groupRouter = router({
       });
 
       if (!group) {
-        throw new Error('Group not found or unauthorized');
+        throw new TRPCError({ 
+          code: 'NOT_FOUND', 
+          message: `Group not found or you are not an accepted member. (ID: ${input.id})` 
+        });
       }
 
       return group;
@@ -128,7 +132,7 @@ export const groupRouter = router({
       });
 
       if (!user) {
-        throw new Error('User with this email does not exist');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User with this email does not exist' });
       }
 
       const existing = await prisma.groupMember.findFirst({
@@ -136,10 +140,10 @@ export const groupRouter = router({
       });
 
       if (existing) {
-        throw new Error('Member already exists in this group');
+        throw new TRPCError({ code: 'CONFLICT', message: 'Member already exists in this group' });
       }
 
-      return prisma.groupMember.create({
+      const member = await prisma.groupMember.create({
         data: {
           groupId: input.groupId,
           email: input.email.toLowerCase(),
@@ -147,6 +151,11 @@ export const groupRouter = router({
           status: GroupMemberStatus.pending,
         },
       });
+
+      // Signal new invite
+      await emitSignal({ userId: user.id }, 'new_invite');
+
+      return member;
     }),
 
   getInvites: protectedProcedure
@@ -175,14 +184,20 @@ export const groupRouter = router({
       });
 
       if (!member) {
-        throw new Error('Invite not found or already accepted');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found or already accepted' });
       }
 
-      return prisma.groupMember.update({
+      const updated = await prisma.groupMember.update({
         where: { id: member.id },
         data: { status: GroupMemberStatus.accepted },
         include: { group: true },
       });
+
+      // Signal group and user
+      await emitSignal({ groupId: input.groupId }, 'group_update');
+      await emitSignal({ userId: ctx.user.id }, 'group_update');
+
+      return updated;
     }),
 
   rejectInvite: protectedProcedure
@@ -197,12 +212,18 @@ export const groupRouter = router({
       });
 
       if (!member) {
-        throw new Error('Invite not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite not found' });
       }
 
-      return prisma.groupMember.delete({
+      const result = await prisma.groupMember.delete({
         where: { id: member.id },
       });
+
+      // Signal group and user
+      await emitSignal({ groupId: input.groupId }, 'group_update');
+      await emitSignal({ userId: ctx.user.id }, 'group_update');
+
+      return result;
     }),
 
   removeGroupMember: protectedProcedure
@@ -216,9 +237,18 @@ export const groupRouter = router({
         throw new Error('Group not found or unauthorized');
       }
 
+      const member = await prisma.groupMember.findFirst({
+        where: { id: input.memberId },
+        select: { userId: true },
+      });
+
       await prisma.groupMember.delete({
         where: { id: input.memberId },
       });
+
+      // Signal group and the specific removed user
+      await emitSignal({ groupId: input.groupId }, 'group_update');
+      if (member?.userId) await emitSignal({ userId: member.userId }, 'group_update');
 
       // Check if there are any accepted members left
       const remainingMembers = await prisma.groupMember.count({
@@ -244,7 +274,7 @@ export const groupRouter = router({
       });
 
       if (!member) {
-        throw new Error('You are not a member of this group');
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'You are not a member of this group' });
       }
 
       // Delete the member
@@ -264,6 +294,10 @@ export const groupRouter = router({
         });
         return { success: true, groupDeleted: true };
       }
+
+      // Signal group update
+      await emitSignal({ groupId: input.groupId }, 'group_update');
+      await emitSignal({ userId: ctx.user.id }, 'group_update');
 
       return { success: true, groupDeleted: false };
     }),

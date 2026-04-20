@@ -4,18 +4,26 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
 import { appRouter, createContext } from './trpc';
+import { initSocket } from './socket';
 
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const port = process.env.PORT || 4000;
 
 // Security & Logging Middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Required for some mobile/web socket environments
+}));
 app.use(morgan('dev'));
 app.use(cors());
 app.use(express.json());
+
+// Initialize Socket.io
+initSocket(httpServer);
 
 // tRPC Middleware
 app.use(
@@ -30,6 +38,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'API is running', uptime: process.uptime() });
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
+httpServer.listen(port, () => {
+  console.log(`🚀 Server + Sockets running on http://localhost:${port}`);
 });

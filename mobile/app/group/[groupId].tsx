@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -390,7 +390,13 @@ export default function GroupDetailPage() {
   const groupId = typeof params.groupId === 'string' ? params.groupId : '';
   const utils = trpc.useUtils();
 
-  const groupQuery = trpc.group.getGroup.useQuery({ id: groupId }, { enabled: !!groupId });
+  const groupQuery = trpc.group.getGroup.useQuery(
+    { id: groupId },
+    {
+      enabled: !!groupId,
+      retry: false,
+    }
+  );
   const group = groupQuery.data as GroupWithMembers | undefined;
   const { isLoading, isError } = groupQuery;
 
@@ -426,8 +432,18 @@ export default function GroupDetailPage() {
       startDate: selectedMemberId ? teamCalendarRange.startDate : undefined,
       endDate: selectedMemberId ? teamCalendarRange.endDate : undefined,
     },
-    { enabled: !!selectedMemberId && !!groupId }
+    {
+      enabled: !!selectedMemberId && !!groupId,
+      retry: false,
+    }
   );
+
+  // Handle graceful redirection if the user is removed from the group in real-time
+  useEffect(() => {
+    if (isError && groupQuery.error?.data?.code === 'NOT_FOUND') {
+      router.replace('/(tabs)/dashboard');
+    }
+  }, [isError, groupQuery.error, router]);
 
   const addGroupMember = trpc.group.addGroupMember.useMutation({
     onSuccess: async () => {
