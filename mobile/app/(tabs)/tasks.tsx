@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
-  Modal,
-  TextInput,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   Alert,
+  KeyboardAvoidingView
 } from 'react-native';
+import { BottomSheetModal, BottomSheetView, BottomSheetScrollView, BottomSheetTextInput, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { StatusBar } from 'expo-status-bar';
 import { 
@@ -78,8 +77,21 @@ export default function TasksScreen() {
   const [pickerTarget, setPickerTarget] = useState<'start' | 'end'>('start');
   const [pickerMode, setPickerMode] = useState<'date' | 'time'>('date');
 
+  const addModalRef = useRef<BottomSheetModal>(null);
+  const filterModalRef = useRef<BottomSheetModal>(null);
+  const detailModalRef = useRef<BottomSheetModal>(null);
+
+  useEffect(() => { if (isAddModalVisible) addModalRef.current?.present(); else addModalRef.current?.dismiss(); }, [isAddModalVisible]);
+  useEffect(() => { if (isFilterModalVisible) filterModalRef.current?.present(); else filterModalRef.current?.dismiss(); }, [isFilterModalVisible]);
+  useEffect(() => { if (isDetailModalVisible) detailModalRef.current?.present(); else detailModalRef.current?.dismiss(); }, [isDetailModalVisible]);
+
+  const handleAddSheetChange = useCallback((index: number) => { if (index === -1 && isAddModalVisible) setAddModalVisible(false); }, [isAddModalVisible]);
+  const handleFilterSheetChange = useCallback((index: number) => { if (index === -1 && isFilterModalVisible) setFilterModalVisible(false); }, [isFilterModalVisible]);
+  const handleDetailSheetChange = useCallback((index: number) => { if (index === -1 && isDetailModalVisible) setDetailModalVisible(false); }, [isDetailModalVisible]);
+
   // Use tRPC to fetch tasks
-  const { data: tasks, isLoading, refetch, isRefetching } = trpc.task.getTasks.useQuery();
+  const tasksQuery = trpc.task.getTasks.useQuery();
+  const { data: tasks, isLoading, refetch, isRefetching } = tasksQuery;
   
   const createTaskMutation = trpc.task.createTask.useMutation({
     onSuccess: () => {
@@ -240,6 +252,23 @@ export default function TasksScreen() {
     );
   }
 
+  if (tasksQuery.isError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f6f5f3', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <AlertCircle color="#ef4444" size={28} />
+        </View>
+        <Text style={{ color: NAVY, fontSize: 18, fontWeight: '800', textAlign: 'center' }}>Failed to load tasks</Text>
+        <TouchableOpacity
+          onPress={() => refetch()}
+          style={{ marginTop: 24, paddingVertical: 14, paddingHorizontal: 32, backgroundColor: NAVY, borderRadius: 16 }}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const todayText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (
@@ -349,19 +378,18 @@ export default function TasksScreen() {
       </View>
 
       {/* Modern Add Task Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isAddModalVisible}
-        onRequestClose={() => setAddModalVisible(false)}
+      <BottomSheetModal
+        ref={addModalRef}
+        snapPoints={['100%']}
+        enablePanDownToClose
+        onChange={handleAddSheetChange}
+        keyboardBehavior="interactive"
+        backdropComponent={(p) => <BottomSheetBackdrop {...p} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />}
+        handleIndicatorStyle={{ backgroundColor: '#f1f5f9', width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setAddModalVisible(false)} />
-          <View className="bg-white rounded-t-[50px] px-8 pt-12 pb-14 shadow-2xl">
-            <View className="w-12 h-1.5 bg-slate-100 rounded-full self-center mb-8" />
+        
+          <BottomSheetView className="flex-1 px-8 pt-4 pb-14">
             
             <View className="flex-row justify-between items-center mb-6">
               <Text className="text-2xl font-bold text-navy" style={{ color: NAVY }}>Define Priority</Text>
@@ -373,10 +401,10 @@ export default function TasksScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} className="max-h-[60vh]">
+            <BottomSheetScrollView showsVerticalScrollIndicator={false}>
               <View className="mb-4">
                 <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Title</Text>
-                <TextInput
+                <BottomSheetTextInput
                   placeholder="Capture the core goal..."
                   placeholderTextColor="#cbd5e1"
                   className="bg-slate-50 p-4 rounded-2xl text-[15px] font-bold text-navy border border-slate-100"
@@ -388,7 +416,7 @@ export default function TasksScreen() {
 
               <View className="mb-4">
                 <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Description</Text>
-                <TextInput
+                <BottomSheetTextInput
                   placeholder="Elaborate on the details..."
                   placeholderTextColor="#cbd5e1"
                   multiline
@@ -440,7 +468,7 @@ export default function TasksScreen() {
                   ))}
                 </View>
               </View>
-            </ScrollView>
+            </BottomSheetScrollView>
 
             <TouchableOpacity
               onPress={handleCreateTask}
@@ -460,7 +488,7 @@ export default function TasksScreen() {
                 <Text className="text-white font-bold text-[16px]">Initialize Priority</Text>
               )}
             </TouchableOpacity>
-          </View>
+          </BottomSheetView>
           
           {showPicker && (
             <DateTimePicker
@@ -471,23 +499,21 @@ export default function TasksScreen() {
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             />
           )}
-        </KeyboardAvoidingView>
-      </Modal>
+
+      </BottomSheetModal>
 
       {/* Filter Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isFilterModalVisible}
-        onRequestClose={() => setFilterModalVisible(false)}
+      <BottomSheetModal
+        ref={filterModalRef}
+        snapPoints={['100%']}
+        enablePanDownToClose
+        onChange={handleFilterSheetChange}
+        keyboardBehavior="interactive"
+        backdropComponent={(p) => <BottomSheetBackdrop {...p} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />}
+        handleIndicatorStyle={{ backgroundColor: '#f1f5f9', width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setFilterModalVisible(false)} />
-          <View className="bg-white rounded-t-[50px] px-8 pt-12 pb-14 shadow-2xl">
-            <View className="w-12 h-1.5 bg-slate-100 rounded-full self-center mb-8" />
+        <BottomSheetView className="flex-1 px-8 pt-4 pb-14">
             
             <View className="flex-row justify-between items-center mb-8">
               <Text className="text-2xl font-bold text-navy" style={{ color: NAVY }}>Filters</Text>
@@ -503,7 +529,7 @@ export default function TasksScreen() {
               </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} className="max-h-[60vh]">
+            <BottomSheetScrollView showsVerticalScrollIndicator={false}>
               {/* Priority Filter */}
               <View className="mb-8">
                 <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Urgency Level</Text>
@@ -550,7 +576,7 @@ export default function TasksScreen() {
                   })}
                 </View>
               </View>
-            </ScrollView>
+            </BottomSheetScrollView>
 
             <TouchableOpacity
               onPress={() => setFilterModalVisible(false)}
@@ -570,24 +596,22 @@ export default function TasksScreen() {
                 </View>
               )}
             </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </BottomSheetView>
+      </BottomSheetModal>
 
       {/* Task Detail Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isDetailModalVisible}
-        onRequestClose={() => setDetailModalVisible(false)}
+      <BottomSheetModal
+        ref={detailModalRef}
+        snapPoints={['100%']}
+        enablePanDownToClose
+        onChange={handleDetailSheetChange}
+        keyboardBehavior="interactive"
+        backdropComponent={(p) => <BottomSheetBackdrop {...p} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />}
+        handleIndicatorStyle={{ backgroundColor: '#f1f5f9', width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: 'white', borderRadius: 40 }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setDetailModalVisible(false)} />
-          <View className="bg-white rounded-t-[50px] px-8 pt-12 pb-14 shadow-2xl">
-            <View className="w-12 h-1.5 bg-slate-100 rounded-full self-center mb-8" />
+        
+          <BottomSheetView className="flex-1 px-8 pt-4 pb-14">
             
             {showDeleteConfirm && selectedTask ? (
               <View className="items-center py-4">
@@ -636,10 +660,10 @@ export default function TasksScreen() {
                   </View>
                 </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} className="max-h-[60vh]">
+                <BottomSheetScrollView showsVerticalScrollIndicator={false}>
                   <View className="mb-4">
                     <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Title</Text>
-                    <TextInput
+                    <BottomSheetTextInput
                       className="bg-slate-50 p-4 rounded-2xl text-[15px] font-bold text-navy border border-slate-100"
                       value={selectedTask.title}
                       onChangeText={(t) => setSelectedTask({...selectedTask, title: t})}
@@ -649,7 +673,7 @@ export default function TasksScreen() {
                   
                   <View className="mb-4">
                     <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Description</Text>
-                    <TextInput
+                    <BottomSheetTextInput
                       multiline
                       className="bg-slate-50 p-4 rounded-2xl text-[14px] font-medium text-navy border border-slate-100 min-h-[80px]"
                       value={selectedTask.description || ''}
@@ -699,7 +723,7 @@ export default function TasksScreen() {
                       ))}
                     </View>
                   </View>
-                </ScrollView>
+                </BottomSheetScrollView>
 
                 <View className="flex-row gap-3 pt-2">
                   <TouchableOpacity 
@@ -733,7 +757,7 @@ export default function TasksScreen() {
                 </View>
               </>
             ) : null}
-          </View>
+          </BottomSheetView>
           
           {showPicker && isDetailModalVisible && (
             <DateTimePicker
@@ -746,8 +770,8 @@ export default function TasksScreen() {
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             />
           )}
-        </KeyboardAvoidingView>
-      </Modal>
+        
+      </BottomSheetModal>
     </View>
   );
 }

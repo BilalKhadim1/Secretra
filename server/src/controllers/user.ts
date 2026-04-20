@@ -224,11 +224,49 @@ export const userRouter = router({
     .input(z.object({
       name: z.string().optional(),
       timezone: z.string().optional(),
+      avatarUrl: z.string().optional(),
+      theme: z.string().optional(),
+      notificationsEnabled: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       return prisma.user.update({
         where: { id: ctx.user.id },
         data: input,
+      });
+    }),
+
+  // Protected procedure: Register push token
+  registerPushToken: protectedProcedure
+    .input(z.object({
+      token: z.string(),
+      deviceId: z.string().optional(),
+      platform: z.enum(['web', 'ios', 'android']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { token, deviceId, platform } = input;
+      
+      const existing = await prisma.pushSubscription.findFirst({
+        where: { endpoint: token }
+      });
+
+      if (existing) {
+        return prisma.pushSubscription.update({
+          where: { id: existing.id },
+          data: {
+            userId: ctx.user.id,
+            deviceId: deviceId || null,
+            platform: platform as any,
+          }
+        });
+      }
+
+      return prisma.pushSubscription.create({
+        data: {
+          userId: ctx.user.id,
+          endpoint: token,
+          deviceId: deviceId || null,
+          platform: platform as any,
+        }
       });
     }),
 });

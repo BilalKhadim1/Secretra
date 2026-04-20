@@ -67,7 +67,9 @@ model User {
   name             String?
   timezone         String              @default("UTC")
   digestTime       DateTime?           @db.Time
-  avatarUrl        String?
+  avatarUrl         String?
+  theme             String              @default("dark")
+  notificationsEnabled Boolean          @default(true) @map("notifications_enabled")
   // OAuth
   googleId         String?             @unique @map("google_id")
   appleId          String?             @unique @map("apple_id")
@@ -112,7 +114,7 @@ model PushSubscription {
   userId    String       @db.Uuid @map("user_id")
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   platform  PlatformType
-  endpoint  String
+  endpoint  String       @unique
   keys      Json?
   deviceId  String?      @map("device_id")
   createdAt DateTime     @default(now()) @db.Timestamptz @map("created_at")

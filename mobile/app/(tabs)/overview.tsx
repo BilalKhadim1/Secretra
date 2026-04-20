@@ -1,19 +1,24 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   TextInput,
+  TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
-  Modal,
-  KeyboardAvoidingView,
   Pressable,
   Platform,
 } from 'react-native';
+import { 
+  BottomSheetModal, 
+  BottomSheetView, 
+  BottomSheetScrollView, 
+  BottomSheetTextInput, 
+  BottomSheetBackdrop 
+} from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import { 
   FileText, 
@@ -43,12 +48,18 @@ export default function NotesScreen() {
   
   const [isAddModalVisible, setAddModalVisible] = useState(false);
   const [isDetailModalVisible, setDetailModalVisible] = useState(false);
+  const [isSortModalVisible, setSortModalVisible] = useState(false);
+
+  const addModalRef = useRef(null);
+  const detailModalRef = useRef(null);
+  const filterModalRef = useRef(null);
+  const snapPoints = useMemo(() => ['100%'], []);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [selectedNote, setSelectedNote] = useState<any>(null);
-  const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'>('idle');
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle');
   
   const [sortOrder, setSortOrder] = useState('Newest');
-  const [isSortModalVisible, setSortModalVisible] = useState(false);
   const [isEditingMode, setIsEditingMode] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -56,31 +67,26 @@ export default function NotesScreen() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
-  // Use tRPC to fetch ALL notes (we filter locally for instant UI)
+  // Use tRPC to fetch ALL notes
   const { data: notes, isLoading, refetch, isRefetching } = trpc.note.getNotes.useQuery();
 
-  const processedNotes = React.useMemo(() => {
+  const processedNotes = useMemo(() => {
     if (!notes) return [];
     let result = [...notes];
     
-    // Local Search Filter
     if (search.trim()) {
        const q = search.toLowerCase();
        result = result.filter(n => 
          (n.title && n.title.toLowerCase().includes(q)) || 
-         (n.plainText && n.plainText.toLowerCase().includes(q)) ||
-         (n.tags && n.tags.some((tag: string) => tag.toLowerCase().includes(q)))
+         (n.plainText && n.plainText.toLowerCase().includes(q))
        );
     }
 
-    // Default exclude archived from main view unless specifically searching for it or showArchived is true
     if (!search.trim() && !showArchived) {
       result = result.filter(n => !n.isArchived);
     }
     
-    // Sort
     result.sort((a, b) => {
-      // Pinned logs float to highest priority
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
@@ -98,17 +104,16 @@ export default function NotesScreen() {
     return result;
   }, [notes, search, sortOrder, showArchived]);
 
-  // @ts-ignore - Failsafe to bypass TS inference depth limit with Prisma
   const createNoteMutation = trpc.note.createNote.useMutation({
     onSuccess: () => {
       refetch();
+      addModalRef.current?.dismiss();
       setAddModalVisible(false);
       setNewTitle('');
       setNewDesc('');
     }
   });
 
-  // @ts-ignore - Failsafe to bypass TS inference depth limit with Prisma
   const updateNoteMutation = trpc.note.updateNote.useMutation({
     onSuccess: () => {
       refetch();
@@ -120,20 +125,17 @@ export default function NotesScreen() {
   const deleteNoteMutation = trpc.note.deleteNote.useMutation({
     onSuccess: () => {
       refetch();
+      detailModalRef.current?.dismiss();
       setDetailModalVisible(false);
       setShowDeleteConfirm(false);
     }
   });
 
-  // Debounced Auto-Save
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedNote || !isDetailModalVisible) return;
     
     const timeoutId = setTimeout(() => {
-      if (
-        selectedNote.title?.trim() !== '' || 
-        selectedNote.plainText?.trim() !== ''
-      ) {
+      if (selectedNote.title?.trim() !== '' || selectedNote.plainText?.trim() !== '') {
          setSaveStatus('saving');
          updateNoteMutation.mutate({
            id: selectedNote.id,
@@ -141,7 +143,7 @@ export default function NotesScreen() {
            plainText: selectedNote.plainText,
          });
       }
-    }, 1500); // Save 1.5s after user stops typing
+    }, 1500);
     
     return () => clearTimeout(timeoutId);
   }, [selectedNote?.title, selectedNote?.plainText]);
@@ -152,17 +154,6 @@ export default function NotesScreen() {
       title: newTitle.trim() || 'Untitled Log',
       plainText: newDesc.trim() || undefined,
     });
-  };
-
-  const handleUpdateNote = () => {
-    if (!selectedNote) return;
-    setSaveStatus('saving');
-    updateNoteMutation.mutate({
-      id: selectedNote.id,
-      title: selectedNote.title,
-      plainText: selectedNote.plainText,
-    });
-    setDetailModalVisible(false);
   };
 
   const handleTogglePin = () => {
@@ -181,107 +172,101 @@ export default function NotesScreen() {
     updateNoteMutation.mutate({ id: upd.id, isArchived: upd.isArchived });
   };
 
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const renderBackdrop = (props) => (
+    <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} opacity={0.6} />
+  );
+
   const todayText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const isError = createNoteMutation.isError || updateNoteMutation.isError || deleteNoteMutation.isError; // This is for mutations, but we want query error too
+  const queryError = trpc.note.getNotes.useQuery().isError;
 
   if (isLoading && !isRefetching) {
     return (
-      <View className="flex-1 justify-center items-center bg-[#f6f5f3]">
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f6f5f3' }}>
         <ActivityIndicator size="large" color={NAVY} />
-        <Text className="mt-4 text-slate-500 font-medium">Opening your logs...</Text>
+        <Text style={{ marginTop: 16, color: '#64748b', fontWeight: '500' }}>Opening your logs...</Text>
       </View>
     );
   }
 
+  if (queryError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f6f5f3', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: '#fee2e2', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <AlertCircle color="#ef4444" size={28} />
+        </View>
+        <Text style={{ color: NAVY, fontSize: 18, fontWeight: '800', textAlign: 'center' }}>Failed to load logs</Text>
+        <TouchableOpacity
+          onPress={() => refetch()}
+          style={{ marginTop: 24, paddingVertical: 14, paddingHorizontal: 32, backgroundColor: NAVY, borderRadius: 16 }}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (processedNotes.length === 0 && !isLoading && !isRefetching && search === '') {
+     // Optional: handle empty state specifically if needed
+  }
+
   return (
-    <View className="flex-1" style={{ backgroundColor: SOFT_BG }}>
+    <View style={{ flex: 1, backgroundColor: SOFT_BG }}>
       <StatusBar style="dark" />
       
-      {/* Premium Header */}
-      <View 
-        className="px-6 pt-16 pb-4 bg-white border-b border-slate-50"
-        style={{ 
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.02,
-          shadowRadius: 4,
-          elevation: 1
-        }}
-      >
-        <View className="flex-row justify-between items-end mb-6">
+      <View style={{ px: 24, pt: 64, pb: 16, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: '#f8fafc' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24, paddingHorizontal: 24 }}>
           <View>
-            <Text className="text-[12px] font-bold text-slate-400 uppercase tracking-[2px] mb-1">{todayText}</Text>
-            <Text className="text-[32px] font-black text-[#111827] tracking-tight">Logs</Text>
+            <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>{todayText}</Text>
+            <Text style={{ fontSize: 32, fontWeight: '900', color: '#111827', letterSpacing: -1 }}>Logs</Text>
           </View>
           <TouchableOpacity 
-            onPress={() => setAddModalVisible(true)}
-            className="w-10 h-10 rounded-full items-center justify-center bg-[#111827]"
-            activeOpacity={0.8}
-            style={{
-              shadowColor: NAVY,
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.15,
-              shadowRadius: 15,
-              elevation: 4
-            }}
+            onPress={() => { setAddModalVisible(true); addModalRef.current?.present(); }}
+            style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111827' }}
           >
             <Plus size={24} color="white" />
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
-        <View className="flex-row items-center bg-slate-50 border border-slate-100 px-4 py-3 rounded-2xl mb-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#f1f5f9', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, marginBottom: 8, marginHorizontal: 24 }}>
           <Search size={18} color="#94a3b8" />
           <TextInput 
-            className="flex-1 ml-3 text-[15px] font-bold text-navy"
+            style={{ flex: 1, marginLeft: 12, fontSize: 15, fontWeight: 'bold', color: NAVY }}
             placeholder="Search logs..."
             placeholderTextColor="#cbd5e1"
             value={search}
             onChangeText={setSearch}
           />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')} className="ml-2 bg-slate-200 p-1.5 rounded-full">
-              <X size={14} color="#64748b" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={() => setSortModalVisible(true)} className="ml-3 border-l border-slate-200 pl-3">
+          <TouchableOpacity onPress={() => setSortModalVisible(true)} style={{ marginLeft: 12, borderLeftWidth: 1, borderLeftColor: '#e2e8f0', paddingLeft: 12 }}>
              <Filter size={18} color={sortOrder !== 'Newest' ? CORAL : NAVY} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowArchived(!showArchived)} className="ml-3 border-l border-slate-200 pl-3">
+          <TouchableOpacity onPress={() => setShowArchived(!showArchived)} style={{ marginLeft: 12, borderLeftWidth: 1, borderLeftColor: '#e2e8f0', paddingLeft: 12 }}>
              <Archive size={18} color={showArchived ? CORAL : NAVY} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Note List */}
       <ScrollView 
-        className="flex-1 px-6"
+        style={{ flex: 1, paddingHorizontal: 24 }}
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={NAVY} />
-        }
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={NAVY} />}
       >
-        <View className="mt-6 mb-4 flex-row items-center justify-between">
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+        <View style={{ marginTop: 24, marginBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2 }}>
             {search.length > 0 ? 'Search Results' : 'Recent Entries'}
           </Text>
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{processedNotes.length} Total</Text>
+          <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2 }}>{processedNotes.length} Total</Text>
         </View>
 
-        {(processedNotes.length === 0) ? (
-          <View className="mt-20 items-center justify-center px-10">
-            <View className="w-24 h-24 bg-slate-100 rounded-[35px] items-center justify-center mb-8 rotate-[-10deg]">
-              <FileText size={48} color="#cbd5e1" />
-            </View>
-            <Text className="text-2xl font-black text-slate-300 text-center tracking-tight">Empty Log</Text>
-            <Text className="text-[15px] text-slate-400 text-center mt-3 font-medium leading-6">
-              Start documenting important details. Tap the add button to log a new entry.
-            </Text>
+        {processedNotes.length === 0 ? (
+          <View style={{ marginTop: 80, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}>
+            <FileText size={48} color="#cbd5e1" />
+            <Text style={{ fontSize: 24, fontWeight: '900', color: '#cbd5e1', textAlign: 'center', marginTop: 32 }}>Empty Log</Text>
           </View>
         ) : (
-          processedNotes.map((note: any) => (
+          processedNotes.map((note) => (
             <NoteItem 
               key={note.id} 
               note={note} 
@@ -290,303 +275,218 @@ export default function NotesScreen() {
                 setShowDeleteConfirm(false);
                 setIsEditingMode(false);
                 setDetailModalVisible(true);
+                detailModalRef.current?.present();
               }}
             />
           ))
         )}
       </ScrollView>
 
-      {/* Modern Add Log Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isAddModalVisible}
-        onRequestClose={() => setAddModalVisible(false)}
+      {/* Add Log Modal */}
+      <BottomSheetModal
+        ref={addModalRef}
+        index={0}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        keyboardBehavior="interactive"
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={{ backgroundColor: "#f1f5f9", width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: "white", borderRadius: 40 }}
+        onChange={(i) => { if (i === -1) setAddModalVisible(false); }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setAddModalVisible(false)} />
-          <View className="bg-white rounded-t-[50px] px-8 pt-12 pb-14 shadow-2xl">
-            <View className="w-12 h-1.5 bg-slate-100 rounded-full self-center mb-8" />
-            
-            <View className="flex-row justify-between items-center mb-6">
-              <Text className="text-2xl font-bold text-navy" style={{ color: NAVY }}>Draft Log</Text>
-              <TouchableOpacity 
-                onPress={() => setAddModalVisible(false)}
-                className="w-8 h-8 rounded-full bg-slate-50 items-center justify-center"
-              >
-                <X size={18} color={NAVY} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} className="max-h-[60vh]">
-              <View className="mb-4">
-                <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Title / Subject</Text>
-                <TextInput
-                  placeholder="Capture the subject..."
-                  placeholderTextColor="#cbd5e1"
-                  className="bg-slate-50 p-4 rounded-2xl text-[15px] font-bold text-navy border border-slate-100"
-                  value={newTitle}
-                  onChangeText={setNewTitle}
-                  style={{ color: NAVY }}
-                />
-              </View>
-
-              <View className="mb-8">
-                <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Log Content</Text>
-                <TextInput
-                  placeholder="Write documentation..."
-                  placeholderTextColor="#cbd5e1"
-                  multiline
-                  className="bg-slate-50 p-4 rounded-2xl text-[14px] font-medium text-navy border border-slate-100 min-h-[150px]"
-                  value={newDesc}
-                  onChangeText={setNewDesc}
-                  style={{ color: NAVY }}
-                  textAlignVertical="top"
-                />
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              onPress={handleCreateNote}
-              disabled={(!newDesc.trim() && !newTitle.trim()) || createNoteMutation.isPending}
-              className={`py-4 rounded-2xl items-center ${(!newDesc.trim() && !newTitle.trim()) ? 'bg-slate-100' : 'bg-navy'}`}
-              style={(!newDesc.trim() && !newTitle.trim()) ? {} : { 
-                backgroundColor: NAVY,
-                shadowColor: NAVY,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 10,
-              }}
-            >
-              {createNoteMutation.isPending ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text className="text-white font-bold text-[16px]">Save Entry</Text>
-              )}
+        <BottomSheetView style={{ flex: 1, paddingHorizontal: 32, paddingTop: 16, paddingBottom: 56 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY }}>Draft Log</Text>
+            <TouchableOpacity onPress={() => addModalRef.current?.dismiss()} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={18} color={NAVY} />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {/* Edit/Detail Log Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isDetailModalVisible}
-        onRequestClose={() => setDetailModalVisible(false)}
+          <BottomSheetScrollView showsVerticalScrollIndicator={false}>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8, marginLeft: 4 }}>Title / Subject</Text>
+              <BottomSheetTextInput
+                placeholder="Capture the subject..."
+                placeholderTextColor="#cbd5e1"
+                style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 15, fontWeight: 'bold', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9' }}
+                value={newTitle}
+                onChangeText={setNewTitle}
+              />
+            </View>
+
+            <View style={{ marginBottom: 32 }}>
+              <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8, marginLeft: 4 }}>Log Content</Text>
+              <BottomSheetTextInput
+                placeholder="Write documentation..."
+                placeholderTextColor="#cbd5e1"
+                multiline
+                style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 14, fontWeight: 'medium', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', minHeight: 150 }}
+                value={newDesc}
+                onChangeText={setNewDesc}
+                textAlignVertical="top"
+              />
+            </View>
+          </BottomSheetScrollView>
+
+          <TouchableOpacity
+            onPress={handleCreateNote}
+            disabled={(!newDesc.trim() && !newTitle.trim()) || createNoteMutation.isPending}
+            style={[{ py: 16, borderRadius: 16, alignItems: 'center', backgroundColor: NAVY }, (!newDesc.trim() && !newTitle.trim()) && { backgroundColor: '#f1f5f9' }]}
+          >
+            {createNoteMutation.isPending ? <ActivityIndicator color="white" /> : <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Save Entry</Text>}
+          </TouchableOpacity>
+        </BottomSheetView>
+      </BottomSheetModal>
+
+      {/* Detail Modal */}
+      <BottomSheetModal
+        ref={detailModalRef}
+        index={0}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        keyboardBehavior="interactive"
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={{ backgroundColor: "#f1f5f9", width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: "white", borderRadius: 40 }}
+        onChange={(i) => { if (i === -1) setDetailModalVisible(false); }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setDetailModalVisible(false)} />
-          <View className="bg-white rounded-t-[50px] px-8 pt-12 pb-14 shadow-2xl">
-            <View className="w-12 h-1.5 bg-slate-100 rounded-full self-center mb-8" />
-            
-            {showDeleteConfirm && selectedNote ? (
-              <View className="items-center py-4">
-                <View className="w-16 h-16 bg-red-50 rounded-full items-center justify-center mb-5">
-                  <AlertCircle size={28} color="#ef4444" />
-                </View>
-                <Text className="text-2xl font-bold text-navy mb-2">Delete Log?</Text>
-                <Text className="text-slate-500 text-center mb-8 px-4 leading-6">
-                  Are you sure you want to permanently delete this entry? This cannot be undone.
-                </Text>
-                
-                <View className="flex-row gap-3 w-full">
-                  <TouchableOpacity 
-                    onPress={() => setShowDeleteConfirm(false)}
-                    className="flex-1 py-4 bg-slate-50 rounded-2xl items-center border border-slate-100"
-                  >
-                    <Text className="font-bold text-slate-600">Cancel</Text>
+        <BottomSheetView style={{ flex: 1, paddingHorizontal: 32, paddingTop: 16, paddingBottom: 56 }}>
+          {selectedNote && (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY, maxWidth: '60%' }} numberOfLines={1}>{selectedNote.title || 'Log Entry'}</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={handleTogglePin} style={[{ p: 8, borderRadius: 12 }, selectedNote.isPinned ? { backgroundColor: '#fef3c7' } : { backgroundColor: '#f8fafc' }]}>
+                    <Pin size={16} color={selectedNote.isPinned ? '#d97706' : '#94a3b8'} />
                   </TouchableOpacity>
-                  <TouchableOpacity 
-                    onPress={() => deleteNoteMutation.mutate({ id: selectedNote.id })}
-                    className="flex-1 py-4 bg-coral rounded-2xl items-center shadow-sm"
-                    style={{ backgroundColor: CORAL }}
-                  >
-                    {deleteNoteMutation.isPending ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text className="font-bold text-white">Delete</Text>
-                    )}
+                  <TouchableOpacity onPress={() => detailModalRef.current?.dismiss()} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}>
+                    <X size={18} color={NAVY} />
                   </TouchableOpacity>
                 </View>
               </View>
-            ) : selectedNote ? (
-              <>
-                <View className="flex-row justify-between items-center mb-6">
-                  <Text className="text-2xl font-bold text-navy max-w-[50%]" style={{ color: NAVY }} numberOfLines={1}>{selectedNote.title || 'Log Entry'}</Text>
-                  <View className="flex-row gap-1 items-center">
-                    <TouchableOpacity onPress={handleTogglePin} className={`p-2 rounded-full ${selectedNote.isPinned ? 'bg-amber-100' : 'bg-slate-50'}`}>
-                       <Pin size={16} color={selectedNote.isPinned ? '#d97706' : '#94a3b8'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={handleToggleArchive} className={`p-2 rounded-full ${selectedNote.isArchived ? 'bg-amber-100' : 'bg-slate-50'}`}>
-                       {selectedNote.isArchived ? <ArchiveRestore size={16} color="#d97706" /> : <Archive size={16} color="#94a3b8" />}
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} className="p-2 ml-1">
-                       <Trash2 size={16} color="#ef4444" />
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => setDetailModalVisible(false)} className="w-8 h-8 rounded-full bg-slate-50 items-center justify-center ml-1">
-                      <X size={16} color={NAVY} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
 
-                <ScrollView showsVerticalScrollIndicator={false} className="max-h-[60vh]">
-                  <View className="mb-4">
-                    <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">Title / Subject</Text>
-                    <TextInput
-                      className="bg-slate-50 p-4 rounded-2xl text-[15px] font-bold text-navy border border-slate-100"
-                      value={selectedNote.title || ''}
-                      onChangeText={(t) => setSelectedNote({...selectedNote, title: t})}
-                      style={{ color: NAVY }}
-                      placeholder="Untitled Log"
-                      placeholderTextColor="#cbd5e1"
-                    />
-                  </View>
-                  
-                  <View className="mb-8">
-                    <View className="flex-row justify-between mb-2 ml-1 pr-1">
-                      <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Log Content</Text>
-                      <TouchableOpacity onPress={() => setIsEditingMode(!isEditingMode)} className="flex-row items-center">
-                        {isEditingMode ? <FileText size={12} color={NAVY} /> : <Edit3 size={12} color={NAVY} />}
-                        <Text className="text-[11px] font-bold text-navy ml-1">{isEditingMode ? 'PREVIEW' : 'EDIT MARKDOWN'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                    
-                    {isEditingMode ? (
-                      <TextInput
-                        multiline
-                        className="bg-slate-50 p-4 rounded-2xl text-[14px] font-medium text-navy border border-slate-100 min-h-[250px]"
-                        value={selectedNote.plainText || ''}
-                        onChangeText={(t) => setSelectedNote({...selectedNote, plainText: t})}
-                        style={{ color: NAVY }}
-                        placeholder="Write dynamic Markdown here..."
-                        placeholderTextColor="#cbd5e1"
-                        textAlignVertical="top"
-                      />
-                    ) : (
-                      <View className="bg-slate-50 p-4 rounded-2xl border border-slate-100 min-h-[250px]">
-                        {selectedNote.plainText ? (
-                           <Markdown style={{ body: { color: NAVY, fontSize: 15, lineHeight: 24 } }}>{selectedNote.plainText}</Markdown>
-                        ) : (
-                           <Text className="text-slate-400 font-medium italic">Empty log body...</Text>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </ScrollView>
-
-                <View className="flex-row items-center justify-between pt-2">
-                  <View className="flex-row items-center pl-2 flex-1">
-                    {saveStatus === 'saving' ? (
-                       <ActivityIndicator size="small" color="#94a3b8" />
-                    ) : saveStatus === 'saved' ? (
-                       <CheckCircle2 size={16} color="#10b981" />
-                    ) : (
-                       <Clock size={16} color="#e2e8f0" />
-                    )}
-                    <Text className="text-[12px] font-bold text-slate-400 ml-2">
-                       {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Auto-saved'}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity 
-                    onPress={() => setDetailModalVisible(false)}
-                    className="flex-1 py-4 rounded-2xl items-center shadow-sm"
-                    style={{ backgroundColor: NAVY }}
-                  >
-                    <Text className="font-bold text-white tracking-widest uppercase text-[12px]">Done</Text>
+              <BottomSheetScrollView showsVerticalScrollIndicator={false}>
+                <BottomSheetTextInput
+                  style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 15, fontWeight: 'bold', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 16 }}
+                  value={selectedNote.title || ''}
+                  onChangeText={(t) => setSelectedNote({...selectedNote, title: t})}
+                />
+                
+                <View style={{ marginBottom: 24 }}>
+                  <TouchableOpacity onPress={() => setIsEditingMode(!isEditingMode)} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    {isEditingMode ? <FileText size={12} color={NAVY} /> : <Edit3 size={12} color={NAVY} />}
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: NAVY, marginLeft: 4 }}>{isEditingMode ? 'PREVIEW' : 'EDIT MARKDOWN'}</Text>
                   </TouchableOpacity>
+                  
+                  {isEditingMode ? (
+                    <BottomSheetTextInput
+                      multiline
+                      style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, fontSize: 14, fontWeight: 'medium', color: NAVY, borderWidth: 1, borderColor: '#f1f5f9', minHeight: 250 }}
+                      value={selectedNote.plainText || ''}
+                      onChangeText={(t) => setSelectedNote({...selectedNote, plainText: t})}
+                      textAlignVertical="top"
+                    />
+                  ) : (
+                    <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 16, borderWith: 1, borderColor: '#f1f5f9', minHeight: 250 }}>
+                       <Markdown style={{ body: { color: NAVY, fontSize: 15, lineHeight: 24 } }}>{selectedNote.plainText || ''}</Markdown>
+                    </View>
+                  )}
                 </View>
-              </>
-            ) : null}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+              </BottomSheetScrollView>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  {saveStatus === 'saving' ? <ActivityIndicator size="small" color="#94a3b8" /> : (saveStatus === 'saved' ? <CheckCircle2 size={16} color="#10b981" /> : <Clock size={16} color="#cbd5e1" />)}
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#94a3b8', marginLeft: 8 }}>{saveStatus === 'saving' ? 'Saving...' : (saveStatus === 'saved' ? 'Saved' : 'Auto-saved')}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowDeleteConfirm(true)} style={{ p: 8 }}>
+                  <Trash2 size={18} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
+          {showDeleteConfirm && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'white', padding: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 40 }}>
+              <AlertCircle size={48} color="#ef4444" />
+              <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY, marginTop: 16 }}>Delete Log?</Text>
+              <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 8, marginBottom: 32 }}>This cannot be undone.</Text>
+              <View style={{ flexDirection: 'row', gap: 12, width: '100%' }}>
+                <TouchableOpacity onPress={() => setShowDeleteConfirm(false)} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center' }}>
+                  <Text style={{ fontWeight: 'bold', color: '#64748b' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteNoteMutation.mutate({ id: selectedNote.id })} style={{ flex: 1, py: 16, borderRadius: 16, backgroundColor: CORAL, alignItems: 'center' }}>
+                  <Text style={{ fontWeight: 'bold', color: 'white' }}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </BottomSheetView>
+      </BottomSheetModal>
 
       {/* Sort Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={isSortModalVisible}
-        onRequestClose={() => setSortModalVisible(false)}
+      <BottomSheetModal
+        ref={filterModalRef}
+        index={0}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        backdropComponent={renderBackdrop}
+        handleIndicatorStyle={{ backgroundColor: "#f1f5f9", width: 48, height: 6 }}
+        backgroundStyle={{ backgroundColor: "white", borderRadius: 40 }}
+        onChange={(i) => { if (i === -1) setSortModalVisible(false); }}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          className="flex-1 justify-end bg-black/60"
-        >
-          <Pressable className="flex-1" onPress={() => setSortModalVisible(false)} />
-          <View className="bg-white rounded-t-[40px] px-8 pt-10 pb-14 shadow-2xl">
-            <View className="flex-row justify-between items-center mb-6">
-               <Text className="text-2xl font-bold text-navy" style={{ color: NAVY }}>Sort Logs</Text>
-               <TouchableOpacity onPress={() => setSortModalVisible(false)} className="w-8 h-8 rounded-full bg-slate-50 items-center justify-center">
-                 <X size={18} color={NAVY} />
-               </TouchableOpacity>
-            </View>
-            
-            <View className="gap-3">
-              {['Newest', 'Oldest', 'A-Z', 'Z-A'].map(option => (
-                <TouchableOpacity 
-                  key={option}
-                  onPress={() => { setSortOrder(option); setSortModalVisible(false); }}
-                  className={`p-4 rounded-2xl flex-row justify-between items-center border ${sortOrder === option ? 'bg-slate-50' : 'border-slate-100'}`}
-                  style={sortOrder === option ? { borderColor: NAVY } : {}}
-                >
-                  <Text className={`font-bold text-[16px] ${sortOrder === option ? 'text-navy' : 'text-slate-400'}`} style={sortOrder === option ? { color: NAVY } : {}}>{option}</Text>
-                  {sortOrder === option && <CheckCircle2 size={20} color={NAVY} />}
-                </TouchableOpacity>
-              ))}
-            </View>
+        <BottomSheetView style={{ flex: 1, paddingHorizontal: 32, paddingTop: 16, paddingBottom: 56 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+             <Text style={{ fontSize: 24, fontWeight: 'bold', color: NAVY }}>Sort Logs</Text>
+             <TouchableOpacity onPress={() => filterModalRef.current?.dismiss()} style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}>
+               <X size={18} color={NAVY} />
+             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          
+          <View style={{ gap: 12 }}>
+            {['Newest', 'Oldest', 'A-Z', 'Z-A'].map(option => (
+              <TouchableOpacity 
+                key={option}
+                onPress={() => { setSortOrder(option); filterModalRef.current?.dismiss(); }}
+                style={[{ padding: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' }, sortOrder === option && { backgroundColor: '#f8fafc', borderColor: NAVY }]}
+              >
+                <Text style={[{ fontSize: 16, fontWeight: 'bold', color: '#94a3b8' }, sortOrder === option && { color: NAVY }]}>{option}</Text>
+                {sortOrder === option && <CheckCircle2 size={20} color={NAVY} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </BottomSheetView>
+      </BottomSheetModal>
     </View>
   );
 }
 
-function NoteItem({ note, onPress }: { note: any; onPress: () => void }) {
-  const dateObj = new Date(note.createdAt);
-  const dateStr = dateObj.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric'
-  });
+function NoteItem({ note, onPress }) {
+  const dateStr = new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   
   return (
     <TouchableOpacity 
       onPress={onPress}
-      className="bg-white rounded-[24px] p-5 mb-3 border border-slate-100"
-      style={{ 
-        shadowColor: '#000', 
-        shadowOffset: { width: 0, height: 4 }, 
-        shadowOpacity: 0.03, 
-        shadowRadius: 10,
-        elevation: 1 
-      }}
+      style={{ backgroundColor: 'white', borderRadius: 24, p: 20, marginBottom: 12, borderWidth: 1, borderColor: '#f1f5f9' }}
       activeOpacity={0.7}
     >
-      <View className="flex-row justify-between items-start mb-2">
-        <View className="flex-1 mr-3 flex-row items-center">
-          {note.isPinned && <Pin size={14} color="#d97706" className="mr-2" />}
-          {note.isArchived && <Archive size={14} color="#94a3b8" className="mr-2" />}
-          <Text className="text-[16px] font-bold text-navy pr-2 leading-6" style={{ color: NAVY }} numberOfLines={1}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, padding: 20 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+          {note.isPinned && <Pin size={14} color="#d97706" style={{ marginRight: 8 }} />}
+          <Text style={{ fontSize: 16, fontWeight: 'bold', color: NAVY }} numberOfLines={1}>
             {note.title || 'Untitled Log'}
           </Text>
         </View>
       </View>
       
-      <Text className="text-[14px] font-medium text-slate-500 leading-5 mb-4" numberOfLines={2}>
+      <Text style={{ fontSize: 14, color: '#64748b', lineHeight: 20, marginBottom: 16, paddingHorizontal: 20 }} numberOfLines={2}>
         {note.plainText || 'No content provided.'}
       </Text>
 
-      <View className="flex-row items-center border-t border-slate-50 pt-3">
-        <View className="flex-row items-center bg-slate-50 py-1 px-2.5 rounded-lg border border-slate-100">
+      <View style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f8fafc', pt: 12, padding: 20 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8 }}>
           <Clock size={11} color="#64748b" />
-          <Text className="text-[10px] text-slate-500 ml-1.5 font-bold uppercase tracking-wider">{dateStr}</Text>
+          <Text style={{ fontSize: 10, color: '#64748b', marginLeft: 6, fontWeight: 'bold', textTransform: 'uppercase' }}>{dateStr}</Text>
         </View>
       </View>
     </TouchableOpacity>

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    View, Text, TextInput, TouchableOpacity,
-    Modal, ScrollView, Switch, Platform, KeyboardAvoidingView,
+    View, Text, TouchableOpacity,
+    Switch, Platform,  ScrollView,
 } from 'react-native';
+import { BottomSheetModal, BottomSheetView, BottomSheetScrollView, BottomSheetTextInput, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { scheduleEventReminder } from '../utils/notifications';
 import { X, Clock, MapPin, AlignLeft, Users, Calendar as CalendarIcon, Bell, CheckSquare, Phone, UtensilsCrossed, Plane, MoreHorizontal } from 'lucide-react-native';
 import { trpc } from '../utils/trpc';
 
@@ -29,6 +31,15 @@ const PRIORITY_STYLES: Record<Priority, { bg: string; text: string; activeBg: st
     high: { bg: '#fffbeb', text: '#d97706', activeBg: '#d97706' },
     critical: { bg: '#fef2f2', text: '#ef4444', activeBg: '#ef4444' },
 };
+
+const REMINDER_OPTIONS = [
+    { label: 'None', minutes: null },
+    { label: 'At time of event', minutes: 0 },
+    { label: '5 minutes before', minutes: 5 },
+    { label: '15 minutes before', minutes: 15 },
+    { label: '30 minutes before', minutes: 30 },
+    { label: '1 hour before', minutes: 60 },
+];
 
 function EventTypeSection({
     selected, onSelect, customValue, onCustomChange, readOnly
@@ -77,7 +88,7 @@ function EventTypeSection({
 
             {selected === 'other' && (
                 <View className="px-4 pb-4">
-                    <TextInput
+                    <BottomSheetTextInput
                         placeholder="Describe the type…"
                         placeholderTextColor="#cbd5e1"
                         value={customValue}
@@ -147,6 +158,23 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
     });
     const [showStartPicker, setShowStartPicker] = useState(false);
     const [showEndPicker, setShowEndPicker] = useState(false);
+    const [reminderMinutes, setReminderMinutes] = useState<number | null>(null);
+
+    const bottomSheetRef = useRef<BottomSheetModal>(null);
+
+    useEffect(() => {
+        if (visible) {
+            bottomSheetRef.current?.present();
+        } else {
+            bottomSheetRef.current?.dismiss();
+        }
+    }, [visible]);
+
+    const handleSheetChanges = useCallback((index: number) => {
+        if (index === -1 && visible) {
+            handleClose();
+        }
+    }, [visible]);
 
     // Fetch groups
     const { data: groups = [] } = trpc.group.getGroups.useQuery();
@@ -232,6 +260,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         setSelectedAttendeeIds([]);
         setIsAllDay(false); setPriority('medium');
         setEventType('meeting'); setCustomType('');
+        setReminderMinutes(null);
         onClose();
     }
 
@@ -254,7 +283,23 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         if (eventToEdit?.id) {
             updateEvent({ id: eventToEdit.id, ...payload });
         } else {
-            createEvent(payload);
+            createEvent(payload, {
+                onSuccess: (newEvent) => {
+                    if (reminderMinutes !== null) {
+                        try {
+                            const { scheduleEventReminder } = require('../utils/notifications');
+                            scheduleEventReminder(
+                                title.trim(),
+                                new Date(startAt),
+                                reminderMinutes,
+                                newEvent.id
+                            );
+                        } catch (e) {
+                            console.error('Failed to schedule local reminder:', e);
+                        }
+                    }
+                }
+            });
         }
     }
 
@@ -262,11 +307,18 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
     return (
-        <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
-            <KeyboardAvoidingView
-                style={{ flex: 1, backgroundColor: '#f6f5f3' }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            >
+        <BottomSheetModal
+            ref={bottomSheetRef}
+            snapPoints={['100%']}
+            enablePanDownToClose
+            onChange={handleSheetChanges}
+            backdropComponent={(props) => (
+                <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+            )}
+            backgroundStyle={{ backgroundColor: '#f6f5f3' }}
+            keyboardBehavior="interactive"
+        >
+            
                 {/* Header */}
                 <View className="flex-row justify-between items-center px-5 py-4 bg-white border-b border-slate-100">
                     <TouchableOpacity onPress={handleClose} className="w-9 h-9 rounded-full bg-slate-100 items-center justify-center">
@@ -291,10 +343,10 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                     )}
                 </View>
 
-                <ScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+                <BottomSheetScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
                     {/* Title */}
                     <View className="bg-white rounded-[20px] px-4 py-3">
-                        <TextInput
+                        <BottomSheetTextInput
                             placeholder="Event title"
                             placeholderTextColor="#cbd5e1"
                             value={title}
@@ -317,7 +369,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                     <View className="bg-white rounded-[20px] overflow-hidden">
                         <View className="flex-row items-start px-4 py-3 border-b border-slate-50">
                             <AlignLeft size={16} color="#94a3b8" style={{ marginTop: 3 }} />
-                            <TextInput
+                            <BottomSheetTextInput
                                 placeholder="Add description"
                                 placeholderTextColor="#cbd5e1"
                                 value={description}
@@ -330,7 +382,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                         </View>
                         <View className="flex-row items-center px-4 py-3">
                             <MapPin size={16} color="#94a3b8" />
-                            <TextInput
+                            <BottomSheetTextInput
                                 placeholder="Add location"
                                 placeholderTextColor="#cbd5e1"
                                 value={location}
@@ -525,7 +577,33 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                             })}
                         </View>
                     </View>
-                </ScrollView>
+
+                    {/* Reminders */}
+                    <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
+                        <View className="flex-row items-center gap-2 mb-3">
+                            <Bell size={14} color="#94a3b8" />
+                            <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Initial Reminder</Text>
+                        </View>
+                        <View className="flex-row flex-wrap gap-2">
+                            {REMINDER_OPTIONS.map((opt) => {
+                                const active = reminderMinutes === opt.minutes;
+                                return (
+                                    <TouchableOpacity
+                                        key={opt.label}
+                                        onPress={() => setReminderMinutes(opt.minutes)}
+                                        disabled={readOnly}
+                                        className="py-2 px-3 rounded-full items-center"
+                                        style={{ backgroundColor: active ? '#f59e0b' : '#fffbeb' }}
+                                    >
+                                        <Text style={{ color: active ? '#fff' : '#d97706', fontWeight: '600', fontSize: 12 }}>
+                                            {opt.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </View>
+                </BottomSheetScrollView>
 
                 {/* Native time pickers */}
                 {showStartPicker && (
@@ -546,7 +624,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                         onChange={(_, date) => { setShowEndPicker(false); if (date) setEnd(date); }}
                     />
                 )}
-            </KeyboardAvoidingView>
-        </Modal>
+            
+        </BottomSheetModal>
     );
 }

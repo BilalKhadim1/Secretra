@@ -3,7 +3,7 @@
     "name": "Secretra",
     "slug": "personal-secretary-hr",
     "version": "1.0.0",
-    "scheme": "personal-secretary",
+    "scheme": "com.bilal.secretra",
     "web": {
       "bundler": "metro"
     },
@@ -17,13 +17,14 @@
     },
     "android": {
       "package": "com.bilal.secretra",
+      "googleServicesFile": "./google-services.json",
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
             {
-              "scheme": "personal-secretary"
+              "scheme": "com.bilal.secretra"
             }
           ],
           "category": [
@@ -40,7 +41,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0ff93509-c749-4589-b32f-739fb1ea105a"
+        "projectId": "dbf18342-d16e-4d15-b6bc-9765238062c4"
       }
     }
   }

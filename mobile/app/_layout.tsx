@@ -11,6 +11,9 @@ import Constants from 'expo-constants';
 import { trpc } from '../utils/trpc';
 import { getStorageItem } from '../utils/storage';
 import { SocketProvider } from '../context/SocketContext';
+import { NotificationManager } from '../components/NotificationManager';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 
 NativeWindStyleSheet.setOutput({
   default: "native",
@@ -25,6 +28,20 @@ if (Platform.OS === 'web') {
     #root, div[data-reactroot] { width: 100% !important; flex: 1; display: flex; }
   `;
   document.head.appendChild(style);
+
+  // Polyfill for legacy TextInputState currentlyFocusedInput on web
+  try {
+    const { TextInput } = require('react-native');
+    if (TextInput.State && typeof TextInput.State.currentlyFocusedInput !== 'function') {
+       TextInput.State.currentlyFocusedInput = () => {
+         try {
+           return TextInput.State.currentlyFocusedField();
+         } catch (e) {
+           return null;
+         }
+       };
+    }
+  } catch (e) { /* ignore */ }
 }
 
 // Helper to get the API URL
@@ -45,7 +62,19 @@ const getBaseUrl = () => {
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: (failureCount, error: any) => {
+          // Don't retry on authentication errors
+          if (error?.data?.httpStatus === 401 || error?.message?.includes('UNAUTHORIZED')) {
+            return false;
+          }
+          return failureCount < 3;
+        },
+      },
+    },
+  }));
 
   const [trpcClient] = useState(() =>
     trpc.createClient({
@@ -78,14 +107,19 @@ export default function RootLayout() {
   }
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient as any}>
-      <QueryClientProvider client={queryClient as any}>
-        <SocketProvider>
-          <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
-            <Stack screenOptions={{ headerShown: false }} />
-          </View>
-        </SocketProvider>
-      </QueryClientProvider>
-    </trpc.Provider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <trpc.Provider client={trpcClient} queryClient={queryClient as any}>
+        <QueryClientProvider client={queryClient as any}>
+          <BottomSheetModalProvider>
+            <SocketProvider>
+              <NotificationManager />
+              <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+                <Stack screenOptions={{ headerShown: false }} />
+              </View>
+            </SocketProvider>
+          </BottomSheetModalProvider>
+        </QueryClientProvider>
+      </trpc.Provider>
+    </GestureHandlerRootView>
   );
 }

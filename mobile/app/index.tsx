@@ -36,19 +36,23 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Google OAuth setup
-  const redirectUri = Platform.OS === 'web'
-    ? (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8082')
-    : AuthSession.makeRedirectUri({ scheme: 'personal-secretary' });
+  const redirectUri = AuthSession.makeRedirectUri({
+    preferLocalhost: Platform.OS === 'web',
+  });
 
   console.log('[Auth] Platform:', Platform.OS, 'Redirect URI:', redirectUri);
 
-  const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!;
+  const androidId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+  console.log('[Auth] Android ID:', androidId);
+  console.log('[Auth] Web ID:', webId);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: googleClientId,
-    iosClientId: googleClientId,
-    webClientId: googleClientId,
-    redirectUri,
+    androidClientId: androidId,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    webClientId: webId,
+    redirectUri: AuthSession.makeRedirectUri({ scheme: 'com.bilal.secretra' }),
     responseType: 'id_token',
     scopes: ['openid', 'profile', 'email'],
     prompt: AuthSession.Prompt.SelectAccount,
