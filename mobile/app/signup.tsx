@@ -20,6 +20,7 @@ import * as AuthSession from 'expo-auth-session';
 import { trpc } from '../utils/trpc';
 import { setStorageItem } from '../utils/storage';
 import { Alert } from 'react-native';
+import { formatError } from '../utils/errors';
 
 const { width, height } = Dimensions.get('window');
 const CORAL = '#e87a6e';
@@ -60,7 +61,7 @@ export default function SignupScreen() {
       }, 100);
     },
     onError: (error: any) => {
-      Alert.alert('Google Login Error', error.message || 'Verification failed');
+      Alert.alert('Google Login Error', formatError(error));
     },
   });
 
@@ -98,7 +99,7 @@ export default function SignupScreen() {
       router.replace('/dashboard');
     },
     onError: (error: any) => {
-      Alert.alert('Signup Error', error.message || 'Something went wrong');
+      Alert.alert('Signup Error', formatError(error));
     },
   });
 

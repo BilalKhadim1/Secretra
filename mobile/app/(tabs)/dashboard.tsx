@@ -136,7 +136,7 @@ export default function DashboardScreen() {
   const STATS = [
     { num: String(activeTasksCount), label: 'Tasks', Icon: IconCheck, color: '#e87a6e', bg: '#fff0ee' },
     { num: String(overview?.todayCount || 0), label: 'Events', Icon: IconCalendar, color: '#6366f1', bg: '#eef0ff' },
-    { num: '3', label: 'Drafts', Icon: IconMail, color: '#10b981', bg: '#ecfdf5' },
+    { num: String(overview?.notesCount || 0), label: 'Logs', Icon: IconMail, color: '#10b981', bg: '#ecfdf5' },
   ];
 
   const mappedInvites = invites.map((inv: any) => ({
@@ -330,36 +330,71 @@ export default function DashboardScreen() {
         {/* ── Body ── */}
         <View style={S.body}>
 
-          {/* ── Next Meeting card — slim ── */}
-          {overview?.nextEvent ? (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => router.push('/(tabs)/calendar')}
-              style={S.meetingCard}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={S.meetingTag}>NEXT MEETING</Text>
-                <Text style={S.meetingTitle} numberOfLines={1}>{overview.nextEvent.title}</Text>
-                <Text style={S.meetingMeta}>
-                  {overview.nextEvent.group?.name ? `${overview.nextEvent.group.name} · ` : ''}
-                  {formatTime(overview.nextEvent.startAt)} – {formatTime(overview.nextEvent.endAt)}
-                </Text>
-              </View>
-              <View style={S.meetingIcon}>
-                <IconUsers color="white" size={18} />
-              </View>
-            </TouchableOpacity>
-          ) : (
-            <View style={S.meetingEmpty}>
-              <View style={S.meetingEmptyIcon}>
-                <IconCalendar color="#94a3b8" size={18} />
-              </View>
-              <View>
-                <Text style={S.meetingEmptyTitle}>No upcoming meetings</Text>
-                <Text style={S.meetingEmptyMeta}>You're free — or schedule something new.</Text>
-              </View>
-            </View>
-          )}
+          {/* ── Next Upcoming (Meeting or Task) card ── */}
+          {(() => {
+            const ev = overview?.nextEvent;
+            const tk = overview?.nextTask;
+            
+            // Determine which one is next
+            let nextItem: any = null;
+            let type: 'meeting' | 'task' = 'meeting';
+
+            if (ev && tk) {
+              if (new Date(ev.startAt) <= new Date(tk.startDate)) {
+                nextItem = ev; type = 'meeting';
+              } else {
+                nextItem = tk; type = 'task';
+              }
+            } else if (ev) {
+              nextItem = ev; type = 'meeting';
+            } else if (tk) {
+              nextItem = tk; type = 'task';
+            }
+
+            if (!nextItem) {
+              return (
+                <View style={S.meetingEmpty}>
+                  <View style={S.meetingEmptyIcon}>
+                    <IconCalendar color="#94a3b8" size={18} />
+                  </View>
+                  <View>
+                    <Text style={S.meetingEmptyTitle}>No upcoming plans</Text>
+                    <Text style={S.meetingEmptyMeta}>You're free — or schedule something new.</Text>
+                  </View>
+                </View>
+              );
+            }
+
+            const isMeeting = type === 'meeting';
+            return (
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => router.push(isMeeting ? '/(tabs)/calendar' : '/(tabs)/tasks')}
+                style={S.meetingCard}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={S.meetingTag}>NEXT {isMeeting ? 'MEETING' : 'TASK'}</Text>
+                  <Text style={S.meetingTitle} numberOfLines={1}>{nextItem.title}</Text>
+                  <Text style={S.meetingMeta}>
+                    {isMeeting && nextItem.group?.name ? `${nextItem.group.name} · ` : ''}
+                    {isMeeting ? (
+                      `${formatTime(nextItem.startAt)} – ${formatTime(nextItem.endAt)}`
+                    ) : (
+                      <Text>
+                        {nextItem.startDate && `Starts ${formatTime(nextItem.startDate)}`}
+                        {nextItem.startDate && nextItem.dueDate && ' · '}
+                        {nextItem.dueDate && `Due ${formatTime(nextItem.dueDate)}`}
+                        {!nextItem.startDate && !nextItem.dueDate && 'No time set'}
+                      </Text>
+                    )}
+                  </Text>
+                </View>
+                <View style={S.meetingIcon}>
+                  {isMeeting ? <IconUsers color="white" size={18} /> : <IconCheck color="white" size={18} />}
+                </View>
+              </TouchableOpacity>
+            );
+          })()}
 
           {/* ── Departments ── */}
           <View style={S.sectionHeader}>

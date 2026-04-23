@@ -21,6 +21,7 @@ import * as AuthSession from 'expo-auth-session';
 import { trpc } from '../utils/trpc';
 import { setStorageItem, getStorageItem } from '../utils/storage';
 import { Alert } from 'react-native';
+import { formatError } from '../utils/errors';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -69,7 +70,7 @@ export default function LoginScreen() {
       }, 100);
     },
     onError: (error: any) => {
-      Alert.alert('Google Login Error', error.message || 'Verification failed');
+      Alert.alert('Google Login Error', formatError(error));
     },
   });
 
@@ -114,7 +115,7 @@ export default function LoginScreen() {
       }, 100);
     },
     onError: (error: any) => {
-      Alert.alert('Login Error', error.message || 'Invalid credentials');
+      Alert.alert('Login Error', formatError(error));
     },
   });
 

@@ -352,6 +352,7 @@ const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
   useEffect(() => { if (visible) ref.current?.present(); else ref.current?.dismiss(); }, [visible]);
 
   const fmt = (date: string, type: 'time' | 'date') => {
+    if (!date) return '';
     const d = new Date(date);
     return type === 'time'
       ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
@@ -372,8 +373,8 @@ const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 }}>
             <AvatarInitials email={member.email} size={46} />
             <View>
-              <Text style={{ color: NAVY, fontSize: 15, fontWeight: '800' }}>{member?.email?.split('@')[0]}</Text>
-              <Text style={{ color: MUTED, fontSize: 12, marginTop: 1 }}>Today's schedule</Text>
+              <Text style={{ color: NAVY, fontSize: 15, fontWeight: '800' }}>{member?.email?.split('@')[0]}'s Plans</Text>
+              <Text style={{ color: MUTED, fontSize: 12, marginTop: 1 }}>Recent and upcoming schedule</Text>
             </View>
           </View>
         )}
@@ -387,7 +388,7 @@ const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
             <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: SURFACE, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <IconCalendar size={22} color="#cbd5e1" />
             </View>
-            <Text style={{ color: MUTED, fontWeight: '600', fontSize: 14 }}>No events today</Text>
+            <Text style={{ color: MUTED, fontWeight: '600', fontSize: 14 }}>No plans scheduled</Text>
           </View>
         ) : (
           <BottomSheetScrollView showsVerticalScrollIndicator={false}>
@@ -397,11 +398,20 @@ const MemberCalendarModal = ({ visible, member, onClose, events, loading }) => {
                 padding: 14, borderRadius: 14, marginBottom: 10,
                 flexDirection: 'row', alignItems: 'center', gap: 12,
               }}>
-                <View style={{ width: 3, height: '100%', backgroundColor: NAVY, borderRadius: 2, alignSelf: 'stretch' }} />
+                <View style={{ 
+                  width: 3, height: '100%', 
+                  backgroundColor: ev.type === 'task' ? '#6366f1' : NAVY, 
+                  borderRadius: 2, alignSelf: 'stretch' 
+                }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontWeight: '700', color: NAVY, fontSize: 14 }}>{ev.title}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontWeight: '700', color: NAVY, fontSize: 14 }}>{ev.title}</Text>
+                    {ev.type === 'task' && (
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366f1' }}>TASK</Text>
+                    )}
+                  </View>
                   <Text style={{ color: MUTED, fontSize: 12, marginTop: 3 }}>
-                    {fmt(ev.startAt, 'time')} – {fmt(ev.endAt, 'time')}
+                    {fmt(ev.start, 'time')} – {fmt(ev.end, 'time')}
                   </Text>
                 </View>
               </View>
