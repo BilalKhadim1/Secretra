@@ -21,7 +21,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const localhost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
     const debuggerHost = Constants.expoConfig?.hostUri;
     const address = debuggerHost?.split(':')[0];
-    
+
     // We remove /trpc from the end as sockets use the base URL
     if (!address) return `http://${localhost}:4000`;
     return `http://${address}:4000`;
@@ -45,24 +45,24 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       socket.on('connect', () => {
-        console.log('✅ Socket connected');
+        console.log('Socket connected');
       });
 
       // ── Real-Time Signal Handlers ──────────────────────────────────────────
-      
+
       socket.on('calendar_update', () => {
-        console.log('📅 Signal: Invalidating calendar events...');
+        console.log('Signal: Invalidating calendar events...');
         utils.calendar.getEvents.invalidate();
         utils.calendar.getDashboardOverview.invalidate();
       });
 
       socket.on('new_invite', () => {
-        console.log('🔔 Signal: New department invite!');
+        console.log('Signal: New department invite!');
         utils.group.getInvites.invalidate();
       });
 
       socket.on('group_update', () => {
-        console.log('👥 Signal: Group membership change...');
+        console.log(' Signal: Group membership change...');
         utils.group.getGroups.invalidate();
         utils.group.getGroup.invalidate();
         utils.group.getInvites.invalidate();
@@ -80,7 +80,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => {
       isMounted = false;
       if (socketRef.current) {
-        console.log('🔌 Cleaning up socket connection...');
+        console.log(' Cleaning up socket connection...');
         socketRef.current.disconnect();
         socketRef.current = null;
       }
