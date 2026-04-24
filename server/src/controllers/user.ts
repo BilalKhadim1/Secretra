@@ -50,11 +50,18 @@ export const userRouter = router({
   googleLogin: publicProcedure
     .input(googleLoginSchema)
     .mutation(async ({ input }) => {
-      const googleUser = await AuthService.verifyGoogleToken(input.idToken);
+      let googleUser;
+      
+      if ('code' in input && input.code) {
+        googleUser = await AuthService.exchangeCodeForToken(input.code);
+      } else if ('idToken' in input && input.idToken) {
+        googleUser = await AuthService.verifyGoogleToken(input.idToken);
+      }
+
       if (!googleUser || !googleUser.email) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
-          message: 'Invalid Google token or email missing',
+          message: 'Invalid Google token/code or email missing',
         });
       }
 

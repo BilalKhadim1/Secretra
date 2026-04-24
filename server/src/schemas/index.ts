@@ -141,7 +141,8 @@ export const socialLoginSchema = z.object({
 });
 
 export const googleLoginSchema = z.object({
-  idToken: z.string(),
+  idToken: z.string().optional(),
+  code: z.string().optional(),
 });
 
 export const updateProfileSchema = z.object({

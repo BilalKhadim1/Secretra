@@ -10,7 +10,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
 const ACCESS_TOKEN_EXPIRY = '7d'; // Typical for web apps, might want longer for mobile
 const REFRESH_TOKEN_EXPIRY = '30d';
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const GOOGLE_ANDROID_CLIENT_ID = '32854911840-60c48hsg2lijdps95rt4djh8kq09e134.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID = '32854911840-f607ufse7v03l19ht797i08mp2a0qtna.apps.googleusercontent.com';
+
+const googleClient = new OAuth2Client(GOOGLE_WEB_CLIENT_ID, GOOGLE_CLIENT_SECRET);
 
 export interface TokenPayload {
   userId: string;
@@ -56,7 +61,11 @@ export class AuthService {
     try {
       const ticket = await googleClient.verifyIdToken({
         idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
+        audience: [
+          GOOGLE_WEB_CLIENT_ID!,
+          GOOGLE_ANDROID_CLIENT_ID,
+          GOOGLE_IOS_CLIENT_ID,
+        ],
       });
       const payload = ticket.getPayload();
       if (!payload) return null;
@@ -69,6 +78,25 @@ export class AuthService {
       };
     } catch (error) {
       console.error('Google verification error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Exchanges an Auth Code for an ID Token (for Auth Code Flow)
+   */
+  static async exchangeCodeForToken(code: string) {
+    try {
+      const { tokens } = await googleClient.getToken({
+        code,
+        // 💡 Must match what makeRedirectUri() returns on mobile (the custom scheme)
+        redirect_uri: 'com.bilal.secretra://', 
+      });
+      
+      if (!tokens.id_token) return null;
+      return this.verifyGoogleToken(tokens.id_token);
+    } catch (error) {
+      console.error('Google code exchange error:', error);
       return null;
     }
   }

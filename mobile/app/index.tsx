@@ -14,9 +14,8 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Lock, Eye, Mail, ArrowRight } from 'lucide-react-native';
 import { FontAwesome6, Ionicons } from '@expo/vector-icons';
-import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 import { trpc } from '../utils/trpc';
 import { setStorageItem, getStorageItem } from '../utils/storage';
@@ -24,6 +23,12 @@ import { Alert } from 'react-native';
 import { formatError } from '../utils/errors';
 
 WebBrowser.maybeCompleteAuthSession();
+
+// Configure Google Sign-In
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  offlineAccess: true,
+});
 
 const { width, height } = Dimensions.get('window');
 const CORAL = '#e87a6e';
@@ -35,29 +40,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  // Google OAuth setup
-  const redirectUri = AuthSession.makeRedirectUri({
-    preferLocalhost: Platform.OS === 'web',
-  });
-
-  console.log('[Auth] Platform:', Platform.OS, 'Redirect URI:', redirectUri);
-
-  const androidId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-  const webId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-
-  console.log('[Auth] Android ID:', androidId);
-  console.log('[Auth] Web ID:', webId);
-
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: androidId,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    webClientId: webId,
-    redirectUri: AuthSession.makeRedirectUri({ scheme: 'com.bilal.secretra' }),
-    responseType: 'id_token',
-    scopes: ['openid', 'profile', 'email'],
-    prompt: AuthSession.Prompt.SelectAccount,
-  });
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const googleLoginMutation = trpc.profile.googleLogin.useMutation({
     onSuccess: async (data: any) => {
@@ -70,29 +53,34 @@ export default function LoginScreen() {
       }, 100);
     },
     onError: (error: any) => {
+      setIsGoogleLoading(false);
       Alert.alert('Google Login Error', formatError(error));
     },
   });
 
-  React.useEffect(() => {
-    if (response) {
-      console.log('[Auth] Response received:', response.type, JSON.stringify(response));
+  const handleGoogleLogin = async () => {
+    try {
+      setIsGoogleLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
       
-      if (response.type === 'success') {
-        const idToken = response.params?.id_token || (response as any).authentication?.idToken;
-        
-        if (idToken) {
-          googleLoginMutation.mutate({ idToken });
-        } else {
-          console.error('[Auth] Token missing from response:', response);
-          Alert.alert('Auth Error', 'Login succeeded but no identity token was received. Try Code flow instead of Implicit.');
-        }
-      } else if (response.type === 'error') {
-        console.error('[Auth] Error:', response.error);
-        Alert.alert('Google Auth Error', response.error?.message || 'Authentication failed.');
+      const idToken = response.data?.idToken;
+      if (idToken) {
+        googleLoginMutation.mutate({ idToken });
+      } else {
+        setIsGoogleLoading(false);
+        Alert.alert('Auth Error', 'Could not get identity token from Google.');
+      }
+    } catch (error: any) {
+      setIsGoogleLoading(false);
+      console.log('[NativeAuth] Error:', error);
+      if (error.code === 'SIGN_IN_CANCELLED') {
+        // User cancelled
+      } else {
+        Alert.alert('Google Auth Error', error.message || 'Authentication failed.');
       }
     }
-  }, [response]);
+  };
 
   React.useEffect(() => {
     const checkSession = async () => {
@@ -125,14 +113,6 @@ export default function LoginScreen() {
       return;
     }
     loginMutation.mutate({ email, password });
-  };
-
-  const handleGoogleLogin = async () => {
-    if (!request) {
-      Alert.alert('Config Error', 'Google auth is not ready yet.');
-      return;
-    }
-    await promptAsync();
   };
 
   const handleAppleLogin = () => {

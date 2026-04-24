@@ -16,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { trpc } from '../../utils/trpc';
 import { removeStorageItem } from '../../utils/storage';
 
@@ -212,8 +213,17 @@ function ProfileScreen() {
 
   const performLogout = async () => {
     try {
+      // 1. Sign out from Google (Native SDK)
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {
+        console.log('[Logout] Google sign-out skipped or failed:', e);
+      }
+
+      // 2. Clear local session
       await removeStorageItem('accessToken');
       await removeStorageItem('refreshToken');
+      
       if (Platform.OS === 'web') window.location.href = '/';
       else router.replace('/');
     } catch { Alert.alert('Error', 'Failed to log out.'); }

@@ -18,7 +18,8 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
