@@ -176,7 +176,7 @@ export default function AvailabilityScreen() {
             <ChevronLeft size={18} color={NAVY} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY }}>Team sync</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: NAVY }}>Team Calander</Text>
             {groupQuery.data?.name && (
               <Text style={{ fontSize: 12, color: MUTED, fontWeight: '600', marginTop: 1 }}>
                 {groupQuery.data.name}
@@ -299,17 +299,17 @@ export default function AvailabilityScreen() {
                   {(m.conflictingEvents || []).map((ev: any, blockIdx: number) => {
                     const start = new Date(ev.start);
                     const end = new Date(ev.end);
-                    
+
                     const dayStart = new Date(selectedDate);
-                    dayStart.setHours(0,0,0,0);
+                    dayStart.setHours(0, 0, 0, 0);
                     const dayEnd = new Date(selectedDate);
-                    dayEnd.setHours(23,59,59,999);
+                    dayEnd.setHours(23, 59, 59, 999);
 
                     // Skip if event doesn't overlap with this day at all
                     if (start > dayEnd || end < dayStart) return null;
 
                     // Grid window: 8 AM to 10 PM (8*60 to 22*60)
-                    const viewStartMin = 480; 
+                    const viewStartMin = 480;
                     const viewEndMin = 1320;
 
                     // Minutes relative to today's midnight

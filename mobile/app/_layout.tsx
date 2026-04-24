@@ -14,6 +14,7 @@ import { SocketProvider } from '../context/SocketContext';
 import { NotificationManager } from '../components/NotificationManager';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
+import { getBaseUrl } from '../utils/api';
 
 NativeWindStyleSheet.setOutput({
   default: "native",
@@ -44,19 +45,8 @@ if (Platform.OS === 'web') {
   } catch (e) { /* ignore */ }
 }
 
-// Helper to get the API URL
-const getBaseUrl = () => {
-  /**
-   * If you're using a physical device, replace 'localhost' with your local IP address
-   * or use expo-constants to get it dynamically.
-   */
-  const localhost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
-  const debuggerHost = Constants.expoConfig?.hostUri;
-  const address = debuggerHost?.split(':')[0];
 
-  if (!address) return `http://${localhost}:4000/trpc`;
-  return `http://${address}:4000/trpc`;
-};
+// Keep the splash screen visible while we fetch resources
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();

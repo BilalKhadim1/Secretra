@@ -6,14 +6,17 @@ import appleSignin from 'apple-signin-auth';
 
 dotenv.config();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-me';
-const ACCESS_TOKEN_EXPIRY = '7d'; // Typical for web apps, might want longer for mobile
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is not defined!');
+}
+const ACCESS_TOKEN_EXPIRY = '7d'; 
 const REFRESH_TOKEN_EXPIRY = '30d';
 
 const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const GOOGLE_ANDROID_CLIENT_ID = '32854911840-60c48hsg2lijdps95rt4djh8kq09e134.apps.googleusercontent.com';
-const GOOGLE_IOS_CLIENT_ID = '32854911840-f607ufse7v03l19ht797i08mp2a0qtna.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT_ID = process.env.GOOGLE_ANDROID_CLIENT_ID!;
+const GOOGLE_IOS_CLIENT_ID = process.env.GOOGLE_IOS_CLIENT_ID!;
 
 const googleClient = new OAuth2Client(GOOGLE_WEB_CLIENT_ID, GOOGLE_CLIENT_SECRET);
 
@@ -39,16 +42,16 @@ export class AuthService {
   }
 
   static signAccessToken(payload: TokenPayload): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+    return jwt.sign(payload, JWT_SECRET!, { expiresIn: ACCESS_TOKEN_EXPIRY });
   }
 
   static signRefreshToken(payload: TokenPayload): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+    return jwt.sign(payload, JWT_SECRET!, { expiresIn: REFRESH_TOKEN_EXPIRY });
   }
 
   static verifyToken(token: string): TokenPayload | null {
     try {
-      return jwt.verify(token, JWT_SECRET) as TokenPayload;
+      return jwt.verify(token, JWT_SECRET!) as unknown as TokenPayload;
     } catch (error) {
       return null;
     }
