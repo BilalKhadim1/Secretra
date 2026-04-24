@@ -1,6 +1,7 @@
 import { router, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
 import { checkConflicts } from '../services/conflictService';
+import { emitSignal } from '../socket';
 import {
   taskFilterSchema,
   taskInputSchema,
@@ -57,7 +58,7 @@ export const taskRouter = router({
         }
       }
 
-      return prisma.task.create({
+      const task = await prisma.task.create({
         data: {
           ...input,
           userId: ctx.user.id,
@@ -66,6 +67,9 @@ export const taskRouter = router({
           sortOrder: nextOrder,
         },
       });
+
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+      return task;
     }),
 
   // Update task (position/status/title)
@@ -85,7 +89,7 @@ export const taskRouter = router({
         }
       }
 
-      return prisma.task.update({
+      const updated = await prisma.task.update({
         where: { id, userId: ctx.user.id },
         data: {
           ...data,
@@ -93,15 +97,21 @@ export const taskRouter = router({
           dueDate: end,
         },
       });
+
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+      return updated;
     }),
 
   // Soft delete task
   deleteTask: protectedProcedure
     .input(idParam)
     .mutation(async ({ ctx, input }) => {
-      return prisma.task.update({
+      const deleted = await prisma.task.update({
         where: { id: input.id, userId: ctx.user.id },
         data: { deletedAt: new Date() },
       });
+
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+      return deleted;
     }),
 });

@@ -8,6 +8,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import Svg, { Path, Rect, Line, Circle, Polyline, Polygon } from 'react-native-svg';
+import { formatDistanceToNow } from 'date-fns';
 import { trpc } from '../../utils/trpc';
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
@@ -56,6 +57,15 @@ const IconChevron = ({ color = '#9ca3af', size = 16 }) => (
     <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+const IconFileText = ({ color = '#64748b', size = 16 }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Polyline points="14 2 14 8 20 8" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Line x1="16" y1="13" x2="8" y2="13" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    <Line x1="16" y1="17" x2="8" y2="17" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    <Polyline points="10 9 9 9 8 9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
 
 const IconPlus = ({ color = '#fff', size = 14 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -63,13 +73,9 @@ const IconPlus = ({ color = '#fff', size = 14 }) => (
   </Svg>
 );
 
-const LOG_ITEMS = [
-  { id: 1, text: 'Scheduled email to HR', time: '2 hours ago', Icon: IconMail, iconColor: '#e87a6e', bg: '#fff0ee' },
-  { id: 2, text: 'Meeting added: Design Sync', time: 'Yesterday · 4:12 PM', Icon: IconCalendar, iconColor: '#6366f1', bg: '#eef0ff' },
-  { id: 3, text: 'Secretarial review finished', time: 'Yesterday · 1:45 PM', Icon: IconCheck, iconColor: '#10b981', bg: '#ecfdf5' },
-];
-
 const DARK = '#111827';
+const NAVY = '#111827';
+const MUTED = '#9ca3af';
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
@@ -80,16 +86,17 @@ export default function DashboardScreen() {
     refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000,
   });
   const { data: tasks, isLoading: isTasksLoading } = trpc.task.getTasks.useQuery();
-  const { data: groups = [], refetch: refetchGroups } = trpc.group.getGroups.useQuery();
   const { data: invites = [], refetch: refetchInvites, isLoading: isInvitesLoading } = trpc.group.getInvites.useQuery();
-  const { data: overview, isLoading: isOverviewLoading } = trpc.calendar.getDashboardOverview.useQuery();
+  const overviewQuery = trpc.calendar.getDashboardOverview.useQuery();
+  const activityQuery = trpc.calendar.getRecentActivity.useQuery();
+  const groupsQuery = trpc.group.getGroups.useQuery();
 
   const invitesModalRef = useRef<BottomSheetModal>(null);
   const createGroupModalRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ['100%'], []);
 
   const acceptInviteMutation = trpc.group.acceptInvite.useMutation({
-    onSuccess: () => { refetchInvites(); refetchGroups(); },
+    onSuccess: () => { refetchInvites(); groupsQuery.refetch(); },
   });
   const rejectInviteMutation = trpc.group.rejectInvite.useMutation({
     onSuccess: () => refetchInvites(),
@@ -98,14 +105,16 @@ export default function DashboardScreen() {
     onSuccess: () => {
       createGroupModalRef.current?.dismiss();
       setGroupName(''); setGroupDesc('');
-      refetchGroups();
+      groupsQuery.refetch();
     },
   });
 
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
 
-  const isLoading = isUserLoading || isTasksLoading || isOverviewLoading;
+  const isLoading = overviewQuery.isLoading || groupsQuery.isLoading || activityQuery.isLoading || isUserLoading || isTasksLoading;
+  const overview = overviewQuery.data;
+  const groups = groupsQuery.data || [];
   const inviteCount = invites?.length ?? 0;
   const activeTasksCount = tasks?.filter((t: any) => t.status !== 'done').length || 0;
 
@@ -274,7 +283,7 @@ export default function DashboardScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         bounces={false}
-        style={{ backgroundColor: DARK }}
+        style={{ backgroundColor: '#f6f5f3' }}
         contentContainerStyle={{ flexGrow: 1 }}
       >
         {/* ── Hero ── */}
@@ -334,7 +343,7 @@ export default function DashboardScreen() {
           {(() => {
             const ev = overview?.nextEvent;
             const tk = overview?.nextTask;
-            
+
             // Determine which one is next
             let nextItem: any = null;
             let type: 'meeting' | 'task' = 'meeting';
@@ -450,22 +459,36 @@ export default function DashboardScreen() {
           </View>
 
           <View style={S.card}>
-            {LOG_ITEMS.map((item, i) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.7}
-                style={[S.logRow, i < LOG_ITEMS.length - 1 && S.logRowDivider]}
-              >
-                <View style={[S.logIcon, { backgroundColor: item.bg }]}>
-                  <item.Icon color={item.iconColor} size={15} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={S.logText}>{item.text}</Text>
-                  <Text style={S.logMeta}>{item.time}</Text>
-                </View>
-                <IconChevron size={14} color="#d1d5db" />
-              </TouchableOpacity>
-            ))}
+            {activityQuery.isLoading ? (
+              <ActivityIndicator color={NAVY} style={{ padding: 24 }} />
+            ) : !activityQuery.data || activityQuery.data.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Text style={{ color: MUTED, fontSize: 13, fontWeight: '600' }}>No recent activity</Text>
+              </View>
+            ) : (
+              activityQuery.data.map((item: any, i: number) => {
+                const Icon = item.type === 'note' ? IconFileText : (item.type === 'event' ? IconUsers : IconCheck);
+                const bg = item.type === 'note' ? '#f0fdf4' : (item.type === 'event' ? '#eff6ff' : '#f5f3ff');
+                const iconColor = item.type === 'note' ? '#16a34a' : (item.type === 'event' ? '#2563eb' : '#7c3aed');
+
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.7}
+                    style={[S.logRow, i < activityQuery.data.length - 1 && S.logRowDivider]}
+                  >
+                    <View style={[S.logIcon, { backgroundColor: bg }]}>
+                      <Icon color={iconColor} size={15} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={S.logText}>{item.text}</Text>
+                      <Text style={S.logMeta}>{formatDistanceToNow(new Date(item.time))} ago</Text>
+                    </View>
+                    <IconChevron size={14} color="#d1d5db" />
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
 
         </View>

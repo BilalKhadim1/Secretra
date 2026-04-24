@@ -425,7 +425,7 @@ function ProfileScreen() {
       {/* ══ MAIN CONTENT ══ */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 48 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
       >
         {/* ── Profile hero ── */}
         <View style={{
@@ -466,7 +466,7 @@ function ProfileScreen() {
         </View>
 
         {/* ── Settings list ── */}
-        <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ paddingHorizontal: 20, marginBottom: 10 }}>
           <SectionLabel>Account</SectionLabel>
           <Card>
             <Row
@@ -536,10 +536,6 @@ function ProfileScreen() {
               right={null}
             />
           </Card>
-
-          <Text style={{ fontSize: 11, color: '#d1d5db', fontWeight: '600', textAlign: 'center', marginTop: 32, letterSpacing: 0.5 }}>
-            SECRETRA v1.0.4
-          </Text>
         </View>
       </ScrollView>
     </View>

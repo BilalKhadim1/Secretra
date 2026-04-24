@@ -109,6 +109,53 @@ export const calendarRouter = router({
       };
     }),
 
+  // Get real activity log for Secretarial Log
+  getRecentActivity: protectedProcedure
+    .query(async ({ ctx }) => {
+      const limit = 4; // Fetch few of each to keep it snappy
+      const [notes, events, tasks] = await Promise.all([
+        prisma.note.findMany({
+          where: { userId: ctx.user.id, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+        }),
+        prisma.event.findMany({
+          where: { userId: ctx.user.id },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+        }),
+        prisma.task.findMany({
+          where: { userId: ctx.user.id, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+        }),
+      ]);
+
+      const log = [
+        ...notes.map(n => ({
+          id: `note-${n.id}`,
+          text: `Created note: ${n.title || n.plainText?.slice(0, 20) || 'New Log'}`,
+          time: n.createdAt,
+          type: 'note'
+        })),
+        ...events.map(e => ({
+          id: `event-${e.id}`,
+          text: `Scheduled meeting: ${e.title}`,
+          time: e.createdAt,
+          type: 'event'
+        })),
+        ...tasks.map(t => ({
+          id: `task-${t.id}`,
+          text: `${t.status === 'done' ? 'Completed' : 'Task added'}: ${t.title}`,
+          time: t.createdAt,
+          type: 'task'
+        })),
+      ].sort((a, b) => b.time.getTime() - a.time.getTime())
+       .slice(0, 5); // Return top 5 overall
+
+      return log;
+    }),
+
   // Get all events for the current user
   getEvents: protectedProcedure
     .input(z.object({

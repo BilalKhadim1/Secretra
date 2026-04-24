@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { router, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
+import { emitSignal } from '../socket';
 import {
   noteFilterSchema,
   noteInputSchema,
@@ -48,6 +49,7 @@ export const noteRouter = router({
             userId: ctx.user.id,
           },
         });
+        await emitSignal({ userId: ctx.user.id }, 'calendar_update');
         return result;
       } catch (err: any) {
         console.error("CREATE NOTE ERROR:", err);
@@ -79,9 +81,11 @@ export const noteRouter = router({
   deleteNote: protectedProcedure
     .input(idParam)
     .mutation(async ({ ctx, input }) => {
-      return prisma.note.update({
+      const deleted = await prisma.note.update({
         where: { id: input.id, userId: ctx.user.id },
         data: { deletedAt: new Date() },
       });
+      await emitSignal({ userId: ctx.user.id }, 'calendar_update');
+      return deleted;
     }),
 });

@@ -51,9 +51,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // ── Real-Time Signal Handlers ──────────────────────────────────────────
 
       socket.on('calendar_update', () => {
-        console.log('Signal: Invalidating calendar events...');
+        console.log('Signal: Invalidating calendar events & logs...');
         utils.calendar.getEvents.invalidate();
         utils.calendar.getDashboardOverview.invalidate();
+        utils.calendar.getRecentActivity.invalidate();
       });
 
       socket.on('new_invite', () => {
