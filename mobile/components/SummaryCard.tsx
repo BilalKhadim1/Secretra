@@ -12,19 +12,15 @@ interface SummaryCardProps {
 
 export const SummaryCard = ({ title, value, Icon, color, onPress }: SummaryCardProps) => {
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       className="bg-white p-5 rounded-[24px] shadow-sm w-[47%] mb-4 border border-slate-50"
       style={{
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 2
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2
       }}
     >
-      <View 
+      <View
         className="w-10 h-10 rounded-[14px] items-center justify-center mb-4"
         style={{ backgroundColor: `${color}15` }}
       >

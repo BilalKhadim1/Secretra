@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, TouchableOpacity,
-    Switch, Platform,  ScrollView,
+    Switch, Platform, ScrollView,
 } from 'react-native';
 import { BottomSheetModal, BottomSheetView, BottomSheetScrollView, BottomSheetTextInput, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -130,9 +130,12 @@ interface Props {
     eventToEdit?: any;
     initialGroupId?: string;
     readOnly?: boolean;
+    initialDate?: Date;
+    prefilledStart?: Date;
+    prefilledEnd?: Date;
 }
 
-export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, readOnly }: Props) {
+export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, readOnly, initialDate, prefilledStart, prefilledEnd }: Props) {
     const utils = trpc.useUtils();
     const { data: currentUser } = trpc.profile.me.useQuery();
 
@@ -276,15 +279,29 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
                 setEventType('meeting');
                 setCustomType('');
                 setReminderMinutes(5);
-                
-                const d = new Date();
-                d.setMinutes(0, 0, 0);
-                d.setHours(d.getHours() + 1);
-                setStart(d);
-                
-                const de = new Date(d);
-                de.setHours(de.getHours() + 1);
-                setEnd(de);
+
+                const baseDate = initialDate ? new Date(initialDate) : new Date();
+                if (prefilledStart) {
+                    setStart(new Date(prefilledStart));
+                    const endFallback = new Date(prefilledStart);
+                    endFallback.setHours(endFallback.getHours() + 1);
+                    setEnd(prefilledEnd ? new Date(prefilledEnd) : endFallback);
+                } else {
+                    const d = new Date(baseDate);
+                    const now = new Date();
+                    // If the selected date is today, default to the next upcoming hour.
+                    // If it's a future/past date, default to 9:00 AM on that day.
+                    if (d.toDateString() === now.toDateString()) {
+                        d.setHours(now.getHours() + 1, 0, 0, 0);
+                    } else {
+                        d.setHours(9, 0, 0, 0);
+                    }
+                    setStart(d);
+
+                    const de = new Date(d);
+                    de.setHours(de.getHours() + 1);
+                    setEnd(de);
+                }
             }
             lastInitRef.current = currentId;
         }
@@ -292,7 +309,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         if (!visible) {
             lastInitRef.current = null;
         }
-    }, [visible, eventToEdit, initialGroupId]);
+    }, [visible, eventToEdit, initialGroupId, initialDate, prefilledStart]);
 
     function handleClose() {
         setTitle(''); setDesc(''); setLocation('');
@@ -306,6 +323,11 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
 
     function handleSave() {
         if (readOnly || !title.trim()) return;
+
+        if (!isAllDay && startAt > endAt) {
+            alert("End time must be after the start time.");
+            return;
+        }
 
         const payload = {
             title: title.trim(),
@@ -324,7 +346,7 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
         if (eventToEdit?.id) {
             updateEvent({ id: eventToEdit.id, ...payload }, {
                 onSuccess: () => {
-                   if (reminderMinutes !== null) {
+                    if (reminderMinutes !== null) {
                         try {
                             const { scheduleEventReminder } = require('../utils/notifications');
                             scheduleEventReminder(
@@ -375,328 +397,328 @@ export function AddEventModal({ visible, onClose, eventToEdit, initialGroupId, r
             backgroundStyle={{ backgroundColor: '#f6f5f3' }}
             keyboardBehavior="interactive"
         >
-            
-                {/* Header */}
-                <View className="flex-row justify-between items-center px-5 py-4 bg-white border-b border-slate-100">
-                    <TouchableOpacity onPress={handleClose} className="w-9 h-9 rounded-full bg-slate-100 items-center justify-center">
-                        <X size={18} color={NAVY} />
+
+            {/* Header */}
+            <View className="flex-row justify-between items-center px-5 py-4 bg-white border-b border-slate-100">
+                <TouchableOpacity onPress={handleClose} className="w-9 h-9 rounded-full bg-slate-100 items-center justify-center">
+                    <X size={18} color={NAVY} />
+                </TouchableOpacity>
+                <Text className="text-[17px] font-bold text-[#111827]">
+                    {readOnly ? 'Event Details' : (eventToEdit ? 'Edit Event' : 'New Event')}
+                </Text>
+                {!readOnly ? (
+                    <TouchableOpacity
+                        onPress={handleSave}
+                        disabled={!title.trim() || isPending}
+                        className="rounded-full px-5 py-2"
+                        style={{ backgroundColor: title.trim() ? NAVY : '#e2e8f0' }}
+                    >
+                        <Text style={{ color: title.trim() ? '#fff' : '#94a3b8', fontWeight: '700', fontSize: 14 }}>
+                            {isPending ? (eventToEdit ? 'Updating…' : 'Saving…') : (eventToEdit ? 'Update' : 'Save')}
+                        </Text>
                     </TouchableOpacity>
-                    <Text className="text-[17px] font-bold text-[#111827]">
-                        {readOnly ? 'Event Details' : (eventToEdit ? 'Edit Event' : 'New Event')}
-                    </Text>
-                    {!readOnly ? (
-                        <TouchableOpacity
-                            onPress={handleSave}
-                            disabled={!title.trim() || isPending}
-                            className="rounded-full px-5 py-2"
-                            style={{ backgroundColor: title.trim() ? NAVY : '#e2e8f0' }}
-                        >
-                            <Text style={{ color: title.trim() ? '#fff' : '#94a3b8', fontWeight: '700', fontSize: 14 }}>
-                                {isPending ? (eventToEdit ? 'Updating…' : 'Saving…') : (eventToEdit ? 'Update' : 'Save')}
-                            </Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <View className="w-14" /> /* Balance the header */
+                ) : (
+                    <View className="w-14" /> /* Balance the header */
+                )}
+            </View>
+
+            <BottomSheetScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+                {/* Title */}
+                <View className="bg-white rounded-[20px] px-4 py-3">
+                    <BottomSheetTextInput
+                        placeholder="Event title"
+                        placeholderTextColor="#cbd5e1"
+                        value={title}
+                        onChangeText={setTitle}
+                        className="text-[17px] font-bold text-[#1e293b]"
+                        autoFocus={!readOnly}
+                        editable={!readOnly}
+                    />
+                </View>
+
+                <EventTypeSection
+                    selected={eventType}
+                    onSelect={setEventType}
+                    customValue={customType}
+                    onCustomChange={setCustomType}
+                    readOnly={readOnly}
+                />
+
+                {/* Description + Location */}
+                <View className="bg-white rounded-[20px] overflow-hidden">
+                    <View className="flex-row items-start px-4 py-3 border-b border-slate-50">
+                        <AlignLeft size={16} color="#94a3b8" style={{ marginTop: 3 }} />
+                        <BottomSheetTextInput
+                            placeholder="Add description"
+                            placeholderTextColor="#cbd5e1"
+                            value={description}
+                            onChangeText={setDesc}
+                            multiline
+                            editable={!readOnly}
+                            className="flex-1 ml-3 text-[15px] text-slate-700"
+                            style={{ minHeight: 60 }}
+                        />
+                    </View>
+                    <View className="flex-row items-center px-4 py-3">
+                        <MapPin size={16} color="#94a3b8" />
+                        <BottomSheetTextInput
+                            placeholder="Add location"
+                            placeholderTextColor="#cbd5e1"
+                            value={location}
+                            onChangeText={setLocation}
+                            editable={!readOnly}
+                            className="flex-1 ml-3 text-[15px] text-slate-700"
+                        />
+                    </View>
+                </View>
+
+                {/* Department/Group Selection - Only shown if not pre-selected via context */}
+                {groups.length > 0 && !initialGroupId && (
+                    <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
+                        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                            Department
+                        </Text>
+                        <View className="flex-row flex-wrap gap-2">
+                            <TouchableOpacity
+                                onPress={() => setSelectedGroupId(null)}
+                                className="py-2 px-3 rounded-full items-center"
+                                style={{
+                                    backgroundColor: !selectedGroupId ? '#111827' : '#f1f5f9',
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 12,
+                                    fontWeight: '600',
+                                    color: !selectedGroupId ? '#fff' : '#64748b',
+                                }}>
+                                    None
+                                </Text>
+                            </TouchableOpacity>
+
+                            {groups.map((group: any) => {
+                                const isActive = selectedGroupId === group.id;
+                                return (
+                                    <TouchableOpacity
+                                        key={group.id}
+                                        onPress={() => setSelectedGroupId(group.id)}
+                                        className="py-2 px-3 rounded-full items-center"
+                                        style={{
+                                            backgroundColor: isActive ? '#06b6d4' : '#ecfeff',
+                                        }}
+                                    >
+                                        <Text style={{
+                                            fontSize: 12,
+                                            fontWeight: '600',
+                                            color: isActive ? '#fff' : '#0891b2',
+                                        }}>
+                                            {group.name}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </View>
+                )}
+
+                {/* Participant Selection - Always shown if group context exists */}
+                {(selectedGroupId || initialGroupId) && (
+                    <View
+                        className={`bg-white rounded-[20px] px-4 py-4 ${!initialGroupId ? 'mt-3' : ''}`}
+                        pointerEvents={readOnly ? 'none' : 'auto'}
+                    >
+                        {membersList.length > 0 && (
+                            <View>
+                                <View className="flex-row justify-between items-center mb-3">
+                                    <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                                        Invite Participants
+                                    </Text>
+                                    {!readOnly && (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                const allIds = membersList.map((m: any) => m.userId).filter(Boolean);
+                                                setSelectedAttendeeIds(selectedAttendeeIds.length === allIds.length ? [] : allIds);
+                                            }}
+                                        >
+                                            <Text className="text-[11px] font-bold text-[#3b82f6]">
+                                                {selectedAttendeeIds.length === membersList.length ? 'Clear All' : 'Select All'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+                                    {membersList.map((m: any) => {
+                                        const mId = m.userId || m.id;
+                                        const isSelected = selectedAttendeeIds.includes(mId);
+                                        return (
+                                            <TouchableOpacity
+                                                key={mId}
+                                                onPress={() => {
+                                                    setSelectedAttendeeIds(prev =>
+                                                        prev.includes(mId) ? prev.filter(id => id !== mId) : [...prev, mId]
+                                                    );
+                                                }}
+                                                disabled={readOnly}
+                                                className="items-center"
+                                            >
+                                                <View
+                                                    className="w-12 h-12 rounded-full items-center justify-center border-2"
+                                                    style={{
+                                                        backgroundColor: isSelected ? '#111827' : '#f8fafc',
+                                                        borderColor: isSelected ? '#3b82f6' : '#e2e8f0',
+                                                    }}
+                                                >
+                                                    <Text className={`text-[12px] font-bold ${isSelected ? 'text-white' : 'text-slate-400'}`}>
+                                                        {m.email.slice(0, 2).toUpperCase()}
+                                                    </Text>
+                                                </View>
+                                                <Text className="text-[10px] text-slate-500 mt-1 font-medium" numberOfLines={1} style={{ width: 44, textAlign: 'center' }}>
+                                                    {m.email.split('@')[0]}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </ScrollView>
+                            </View>
+                        )}
+
+                        {/* Busy Members Warning */}
+                        {(busyMembers.length > 0 || hasPersonalConflict) && !readOnly && (
+                            <View className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex-row items-start gap-3">
+                                <Bell size={16} color="#d97706" style={{ marginTop: 2 }} />
+                                <View className="flex-1">
+                                    <Text className="text-[13px] font-bold text-amber-800">Schedule Conflict</Text>
+                                    <View className="mt-1">
+                                        {hasPersonalConflict && (
+                                            <Text className="text-[12px] text-amber-700">
+                                                • You already have an event scheduled during this time.
+                                            </Text>
+                                        )}
+                                        {busyMembers.map((m, idx) => (
+                                            <Text key={idx} className="text-[12px] text-amber-700">
+                                                • {m.userId === currentUser?.id ? 'You' : m.name} {m.userId === currentUser?.id ? 'have' : 'has'} {m.conflictingEvents.length} overlap{m.conflictingEvents.length > 1 ? 's' : ''}
+                                            </Text>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                )}
+
+                {/* All Day + Time */}
+                <View className="bg-white rounded-[20px] overflow-hidden" pointerEvents={readOnly ? 'none' : 'auto'}>
+                    <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-50">
+                        <Text className="text-[15px] font-semibold text-[#1e293b]">All day</Text>
+                        {!readOnly && <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ true: NAVY }} />}
+                        {readOnly && <Text className="text-[15px] text-slate-400">{isAllDay ? 'Yes' : 'No'}</Text>}
+                    </View>
+
+                    {!isAllDay && (
+                        <>
+                            <TouchableOpacity
+                                className="flex-row items-center justify-between px-4 py-4 border-b border-slate-50"
+                                onPress={() => setShowStartPicker(true)}
+                                disabled={readOnly}
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <Clock size={16} color="#94a3b8" />
+                                    <Text className="text-[15px] text-slate-500">Start</Text>
+                                </View>
+                                <Text className="text-[15px] font-semibold text-[#111827]">{formatTime(startAt)}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                className="flex-row items-center justify-between px-4 py-4"
+                                onPress={() => setShowEndPicker(true)}
+                                disabled={readOnly}
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <Clock size={16} color="#94a3b8" />
+                                    <Text className="text-[15px] text-slate-500">End</Text>
+                                </View>
+                                <Text className="text-[15px] font-semibold text-[#111827]">{formatTime(endAt)}</Text>
+                            </TouchableOpacity>
+                        </>
                     )}
                 </View>
 
-                <BottomSheetScrollView className="flex-1" contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
-                    {/* Title */}
-                    <View className="bg-white rounded-[20px] px-4 py-3">
-                        <BottomSheetTextInput
-                            placeholder="Event title"
-                            placeholderTextColor="#cbd5e1"
-                            value={title}
-                            onChangeText={setTitle}
-                            className="text-[17px] font-bold text-[#1e293b]"
-                            autoFocus={!readOnly}
-                            editable={!readOnly}
-                        />
-                    </View>
-
-                    <EventTypeSection
-                        selected={eventType}
-                        onSelect={setEventType}
-                        customValue={customType}
-                        onCustomChange={setCustomType}
-                        readOnly={readOnly}
-                    />
-
-                    {/* Description + Location */}
-                    <View className="bg-white rounded-[20px] overflow-hidden">
-                        <View className="flex-row items-start px-4 py-3 border-b border-slate-50">
-                            <AlignLeft size={16} color="#94a3b8" style={{ marginTop: 3 }} />
-                            <BottomSheetTextInput
-                                placeholder="Add description"
-                                placeholderTextColor="#cbd5e1"
-                                value={description}
-                                onChangeText={setDesc}
-                                multiline
-                                editable={!readOnly}
-                                className="flex-1 ml-3 text-[15px] text-slate-700"
-                                style={{ minHeight: 60 }}
-                            />
-                        </View>
-                        <View className="flex-row items-center px-4 py-3">
-                            <MapPin size={16} color="#94a3b8" />
-                            <BottomSheetTextInput
-                                placeholder="Add location"
-                                placeholderTextColor="#cbd5e1"
-                                value={location}
-                                onChangeText={setLocation}
-                                editable={!readOnly}
-                                className="flex-1 ml-3 text-[15px] text-slate-700"
-                            />
-                        </View>
-                    </View>
-
-                    {/* Department/Group Selection - Only shown if not pre-selected via context */}
-                    {groups.length > 0 && !initialGroupId && (
-                        <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
-                            <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-                                Department
-                            </Text>
-                            <View className="flex-row flex-wrap gap-2">
+                {/* Priority */}
+                <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
+                    <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Priority</Text>
+                    <View className="flex-row gap-2">
+                        {PRIORITIES.map((p) => {
+                            const s = PRIORITY_STYLES[p];
+                            const active = priority === p;
+                            return (
                                 <TouchableOpacity
-                                    onPress={() => setSelectedGroupId(null)}
-                                    className="py-2 px-3 rounded-full items-center"
-                                    style={{
-                                        backgroundColor: !selectedGroupId ? '#111827' : '#f1f5f9',
-                                    }}
+                                    key={p}
+                                    onPress={() => setPriority(p)}
+                                    disabled={readOnly}
+                                    className="flex-1 py-2 rounded-full items-center"
+                                    style={{ backgroundColor: active ? s.activeBg : s.bg }}
                                 >
-                                    <Text style={{
-                                        fontSize: 12,
-                                        fontWeight: '600',
-                                        color: !selectedGroupId ? '#fff' : '#64748b',
-                                    }}>
-                                        None
+                                    <Text style={{ color: active ? '#fff' : s.text, fontWeight: '700', fontSize: 12 }}>
+                                        {p.charAt(0).toUpperCase() + p.slice(1)}
                                     </Text>
                                 </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </View>
 
-                                {groups.map((group: any) => {
-                                    const isActive = selectedGroupId === group.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={group.id}
-                                            onPress={() => setSelectedGroupId(group.id)}
-                                            className="py-2 px-3 rounded-full items-center"
-                                            style={{
-                                                backgroundColor: isActive ? '#06b6d4' : '#ecfeff',
-                                            }}
-                                        >
-                                            <Text style={{
-                                                fontSize: 12,
-                                                fontWeight: '600',
-                                                color: isActive ? '#fff' : '#0891b2',
-                                            }}>
-                                                {group.name}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                        </View>
-                    )}
-
-                    {/* Participant Selection - Always shown if group context exists */}
-                    {(selectedGroupId || initialGroupId) && (
-                        <View 
-                            className={`bg-white rounded-[20px] px-4 py-4 ${!initialGroupId ? 'mt-3' : ''}`}
-                            pointerEvents={readOnly ? 'none' : 'auto'}
-                        >
-                            {membersList.length > 0 && (
-                                <View>
-                                    <View className="flex-row justify-between items-center mb-3">
-                                        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                                            Invite Participants
-                                        </Text>
-                                        {!readOnly && (
-                                            <TouchableOpacity
-                                                onPress={() => {
-                                                    const allIds = membersList.map((m: any) => m.userId).filter(Boolean);
-                                                    setSelectedAttendeeIds(selectedAttendeeIds.length === allIds.length ? [] : allIds);
-                                                }}
-                                            >
-                                                <Text className="text-[11px] font-bold text-[#3b82f6]">
-                                                    {selectedAttendeeIds.length === membersList.length ? 'Clear All' : 'Select All'}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
-                                        {membersList.map((m: any) => {
-                                            const mId = m.userId || m.id;
-                                            const isSelected = selectedAttendeeIds.includes(mId);
-                                            return (
-                                                <TouchableOpacity
-                                                    key={mId}
-                                                    onPress={() => {
-                                                        setSelectedAttendeeIds(prev =>
-                                                            prev.includes(mId) ? prev.filter(id => id !== mId) : [...prev, mId]
-                                                        );
-                                                    }}
-                                                    disabled={readOnly}
-                                                    className="items-center"
-                                                >
-                                                    <View
-                                                        className="w-12 h-12 rounded-full items-center justify-center border-2"
-                                                        style={{
-                                                            backgroundColor: isSelected ? '#111827' : '#f8fafc',
-                                                            borderColor: isSelected ? '#3b82f6' : '#e2e8f0',
-                                                        }}
-                                                    >
-                                                        <Text className={`text-[12px] font-bold ${isSelected ? 'text-white' : 'text-slate-400'}`}>
-                                                            {m.email.slice(0, 2).toUpperCase()}
-                                                        </Text>
-                                                    </View>
-                                                    <Text className="text-[10px] text-slate-500 mt-1 font-medium" numberOfLines={1} style={{ width: 44, textAlign: 'center' }}>
-                                                        {m.email.split('@')[0]}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </ScrollView>
-                                </View>
-                            )}
-
-                            {/* Busy Members Warning */}
-                            {(busyMembers.length > 0 || hasPersonalConflict) && !readOnly && (
-                                <View className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex-row items-start gap-3">
-                                    <Bell size={16} color="#d97706" style={{ marginTop: 2 }} />
-                                    <View className="flex-1">
-                                        <Text className="text-[13px] font-bold text-amber-800">Schedule Conflict</Text>
-                                        <View className="mt-1">
-                                            {hasPersonalConflict && (
-                                                <Text className="text-[12px] text-amber-700">
-                                                    • You already have an event scheduled during this time.
-                                                </Text>
-                                            )}
-                                            {busyMembers.map((m, idx) => (
-                                                <Text key={idx} className="text-[12px] text-amber-700">
-                                                    • {m.userId === currentUser?.id ? 'You' : m.name} {m.userId === currentUser?.id ? 'have' : 'has'} {m.conflictingEvents.length} overlap{m.conflictingEvents.length > 1 ? 's' : ''}
-                                                </Text>
-                                            ))}
-                                        </View>
-                                    </View>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    {/* All Day + Time */}
-                    <View className="bg-white rounded-[20px] overflow-hidden" pointerEvents={readOnly ? 'none' : 'auto'}>
-                        <View className="flex-row justify-between items-center px-4 py-4 border-b border-slate-50">
-                            <Text className="text-[15px] font-semibold text-[#1e293b]">All day</Text>
-                            {!readOnly && <Switch value={isAllDay} onValueChange={setIsAllDay} trackColor={{ true: NAVY }} />}
-                            {readOnly && <Text className="text-[15px] text-slate-400">{isAllDay ? 'Yes' : 'No'}</Text>}
-                        </View>
-
-                        {!isAllDay && (
-                            <>
+                {/* Reminders */}
+                <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
+                    <View className="flex-row items-center gap-2 mb-3">
+                        <Bell size={14} color="#94a3b8" />
+                        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Initial Reminder</Text>
+                    </View>
+                    <View className="flex-row flex-wrap gap-2">
+                        {REMINDER_OPTIONS.map((opt) => {
+                            const active = reminderMinutes === opt.minutes;
+                            return (
                                 <TouchableOpacity
-                                    className="flex-row items-center justify-between px-4 py-4 border-b border-slate-50"
-                                    onPress={() => setShowStartPicker(true)}
+                                    key={opt.label}
+                                    onPress={() => setReminderMinutes(opt.minutes)}
                                     disabled={readOnly}
+                                    className="py-2 px-3 rounded-full items-center"
+                                    style={{ backgroundColor: active ? '#f59e0b' : '#fffbeb' }}
                                 >
-                                    <View className="flex-row items-center gap-3">
-                                        <Clock size={16} color="#94a3b8" />
-                                        <Text className="text-[15px] text-slate-500">Start</Text>
-                                    </View>
-                                    <Text className="text-[15px] font-semibold text-[#111827]">{formatTime(startAt)}</Text>
+                                    <Text style={{ color: active ? '#fff' : '#d97706', fontWeight: '600', fontSize: 12 }}>
+                                        {opt.label}
+                                    </Text>
                                 </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    className="flex-row items-center justify-between px-4 py-4"
-                                    onPress={() => setShowEndPicker(true)}
-                                    disabled={readOnly}
-                                >
-                                    <View className="flex-row items-center gap-3">
-                                        <Clock size={16} color="#94a3b8" />
-                                        <Text className="text-[15px] text-slate-500">End</Text>
-                                    </View>
-                                    <Text className="text-[15px] font-semibold text-[#111827]">{formatTime(endAt)}</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
+                            );
+                        })}
                     </View>
+                </View>
+            </BottomSheetScrollView>
 
-                    {/* Priority */}
-                    <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
-                        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Priority</Text>
-                        <View className="flex-row gap-2">
-                            {PRIORITIES.map((p) => {
-                                const s = PRIORITY_STYLES[p];
-                                const active = priority === p;
-                                return (
-                                    <TouchableOpacity
-                                        key={p}
-                                        onPress={() => setPriority(p)}
-                                        disabled={readOnly}
-                                        className="flex-1 py-2 rounded-full items-center"
-                                        style={{ backgroundColor: active ? s.activeBg : s.bg }}
-                                    >
-                                        <Text style={{ color: active ? '#fff' : s.text, fontWeight: '700', fontSize: 12 }}>
-                                            {p.charAt(0).toUpperCase() + p.slice(1)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </View>
+            {/* Native time pickers */}
+            {showStartPicker && (
+                <DateTimePicker
+                    value={startAt}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, date) => {
+                        if (Platform.OS === 'android') setShowStartPicker(false);
+                        if (date) setStart(date);
+                    }}
+                />
+            )}
+            {showEndPicker && (
+                <DateTimePicker
+                    value={endAt}
+                    mode="time"
+                    is24Hour={false}
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={(_, date) => {
+                        if (Platform.OS === 'android') setShowEndPicker(false);
+                        if (date) setEnd(date);
+                    }}
+                />
+            )}
 
-                    {/* Reminders */}
-                    <View className="bg-white rounded-[20px] px-4 py-4" pointerEvents={readOnly ? 'none' : 'auto'}>
-                        <View className="flex-row items-center gap-2 mb-3">
-                            <Bell size={14} color="#94a3b8" />
-                            <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Initial Reminder</Text>
-                        </View>
-                        <View className="flex-row flex-wrap gap-2">
-                            {REMINDER_OPTIONS.map((opt) => {
-                                const active = reminderMinutes === opt.minutes;
-                                return (
-                                    <TouchableOpacity
-                                        key={opt.label}
-                                        onPress={() => setReminderMinutes(opt.minutes)}
-                                        disabled={readOnly}
-                                        className="py-2 px-3 rounded-full items-center"
-                                        style={{ backgroundColor: active ? '#f59e0b' : '#fffbeb' }}
-                                    >
-                                        <Text style={{ color: active ? '#fff' : '#d97706', fontWeight: '600', fontSize: 12 }}>
-                                            {opt.label}
-                                        </Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-                    </View>
-                </BottomSheetScrollView>
-
-                {/* Native time pickers */}
-                {showStartPicker && (
-                    <DateTimePicker
-                        value={startAt}
-                        mode="time"
-                        is24Hour={false}
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(_, date) => { 
-                            if (Platform.OS === 'android') setShowStartPicker(false); 
-                            if (date) setStart(date); 
-                        }}
-                    />
-                )}
-                {showEndPicker && (
-                    <DateTimePicker
-                        value={endAt}
-                        mode="time"
-                        is24Hour={false}
-                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                        onChange={(_, date) => { 
-                            if (Platform.OS === 'android') setShowEndPicker(false); 
-                            if (date) setEnd(date); 
-                        }}
-                    />
-                )}
-            
         </BottomSheetModal>
     );
 }

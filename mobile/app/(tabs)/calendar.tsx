@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TextInput,
 } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -220,7 +221,15 @@ function EventItem({
 // ── Main screen ──
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  React.useEffect(() => {
+    if (params.date && typeof params.date === 'string') {
+      setSelectedDate(new Date(params.date));
+    }
+  }, [params.date]);
+
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -233,7 +242,15 @@ export default function CalendarScreen() {
   );
 
   const deleteEventMutation = trpc.calendar.deleteEvent.useMutation({
-    onSuccess: () => utils.calendar.getEvents.invalidate(),
+    onSuccess: async (_, variables) => {
+      utils.calendar.getEvents.invalidate();
+      try {
+        const { cancelEventReminder } = require('../../utils/notifications');
+        await cancelEventReminder(variables.id);
+      } catch (e) {
+        console.error('Notification cancel error:', e);
+      }
+    },
   });
 
   const dayEvents = useMemo(() =>
@@ -371,6 +388,7 @@ export default function CalendarScreen() {
       <AddEventModal
         visible={showAddEvent}
         onClose={() => setShowAddEvent(false)}
+        initialDate={selectedDate}
       />
 
       {/* Edit event modal */}

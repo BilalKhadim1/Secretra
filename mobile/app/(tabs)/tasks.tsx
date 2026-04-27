@@ -357,7 +357,16 @@ export default function TasksScreen() {
   });
   
   const deleteTaskMutation = trpc.task.deleteTask.useMutation({
-    onSuccess: () => { refetch(); setDetailModalVisible(false); },
+    onSuccess: async (_, variables) => { 
+      refetch(); 
+      setDetailModalVisible(false); 
+      try {
+        const { cancelTaskReminder } = require('../../utils/notifications');
+        await cancelTaskReminder(variables.id);
+      } catch (e) {
+        console.error('Notification cancel error:', e);
+      }
+    },
   });
 
   const checkPersonalConflicts = trpc.calendar.getEvents.useQuery(
@@ -387,6 +396,12 @@ export default function TasksScreen() {
 
   const handleCreateTask = () => {
     if (!newTitle.trim()) return;
+
+    if (startDate && dueDate && startDate > dueDate) {
+      alert("Due date must be after start date.");
+      return;
+    }
+
     setServerError(null);
     const payload: any = { title: newTitle, description: newDesc, priority: newPriority, reminderMinutes: reminder };
     if (startDate) payload.startDate = startDate.toISOString();
@@ -396,6 +411,12 @@ export default function TasksScreen() {
 
   const handleUpdateTask = () => {
     if (!selectedTask?.title.trim()) return;
+
+    if (selectedTask.startDate && selectedTask.dueDate && new Date(selectedTask.startDate) > new Date(selectedTask.dueDate)) {
+      alert("Due date must be after start date.");
+      return;
+    }
+
     setServerError(null);
     updateTaskMutation.mutate({
       id: selectedTask.id,

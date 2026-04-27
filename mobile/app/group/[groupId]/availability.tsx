@@ -37,8 +37,8 @@ function colWidth(memberCount: number): number {
   return Math.min(Math.max(natural, MIN_COL), MAX_COL);
 }
 
-// 8 AM → 9 PM — the useful working window
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
+// 24 hours, starting at 8 AM and wrapping around
+const HOURS = Array.from({ length: 24 }, (_, i) => (i + 8) % 24);
 
 function hourLabel(h: number) {
   if (h === 0) return '12 AM';
@@ -197,12 +197,14 @@ export default function AvailabilityScreen() {
 
       {/* ── Grid ── */}
       <ScrollView
-        horizontal={needsHScroll}
+        horizontal
+        style={{ flex: 1 }}
+        contentContainerStyle={{ minWidth: '100%', flexGrow: 1 }}
         showsHorizontalScrollIndicator={false}
         directionalLockEnabled={false}
         bounces={false}
       >
-        <View style={{ width: Math.max(gridWidth, SCREEN_WIDTH) }}>
+        <View style={{ width: Math.max(gridWidth, SCREEN_WIDTH), flex: 1 }}>
 
           {/* Member header row */}
           <View style={{
@@ -302,57 +304,88 @@ export default function AvailabilityScreen() {
 
                     const dayStart = new Date(selectedDate);
                     dayStart.setHours(0, 0, 0, 0);
+
                     const dayEnd = new Date(selectedDate);
                     dayEnd.setHours(23, 59, 59, 999);
 
-                    // Skip if event doesn't overlap with this day at all
-                    if (start > dayEnd || end < dayStart) return null;
+                    // Skip if event doesn't overlap with this specific Calendar Day
+                    if (end <= dayStart || start >= dayEnd) return null;
 
-                    // Grid window: 8 AM to 10 PM (8*60 to 22*60)
-                    const viewStartMin = 480;
-                    const viewEndMin = 1320;
+                    const clampedStart = new Date(Math.max(start.getTime(), dayStart.getTime()));
+                    let clampedEnd = new Date(Math.min(end.getTime(), dayEnd.getTime()));
+                    // Push end to the minute boundary if it was clamped to exactly 23:59:59.999
+                    if (clampedEnd.getTime() === dayEnd.getTime()) {
+                        clampedEnd = new Date(dayEnd.getTime() + 1); // Exact midnight
+                    }
 
-                    // Minutes relative to today's midnight
-                    const sMin = start < dayStart ? 0 : (start.getHours() * 60 + start.getMinutes());
-                    const eMin = end > dayEnd ? 1440 : (end.getHours() * 60 + end.getMinutes());
+                    // Custom mapping: 8:00 AM = 0, Midnight = 16 hours, 7:59 AM = 23h59
+                    const getVisualMins = (d: Date) => {
+                        const m = d.getHours() * 60 + d.getMinutes();
+                        return (m - 480 + 1440) % 1440;
+                    };
 
-                    // Skip if event is outside the 8 AM - 10 PM window
-                    if (eMin <= viewStartMin || sMin >= viewEndMin) return null;
-
-                    const displayStart = Math.max(sMin, viewStartMin);
-                    const displayEnd = Math.min(eMin, viewEndMin);
-
-                    const top = ((displayStart - viewStartMin) / 60) * HOUR_HEIGHT;
-                    const height = Math.max(((displayEnd - displayStart) / 60) * HOUR_HEIGHT, 18);
                     const isTask = ev.type === 'task';
-                    return (
-                      <View
-                        key={blockIdx}
-                        style={{
-                          position: 'absolute',
-                          top, left: 3, right: 3,
-                          height,
-                          backgroundColor: isTask ? '#eff6ff' : '#fff0ee',
-                          borderRadius: 6,
-                          borderLeftWidth: 2.5,
-                          borderLeftColor: isTask ? ACCENT : CORAL,
-                          paddingHorizontal: 5,
-                          paddingTop: 3,
-                          zIndex: 10,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 9, fontWeight: '700',
-                            color: isTask ? ACCENT : CORAL,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {ev.title || 'Busy'}
-                        </Text>
-                      </View>
-                    );
+
+                    // Renders a single UI block safely
+                    const renderBox = (topMins: number, bottomMins: number, keySuffix: string) => {
+                        const top = (topMins / 60) * HOUR_HEIGHT;
+                        const height = Math.max(((bottomMins - topMins) / 60) * HOUR_HEIGHT, 18);
+                        return (
+                          <View
+                            key={`${blockIdx}-${keySuffix}`}
+                            style={{
+                              position: 'absolute',
+                              top, left: 3, right: 3,
+                              height,
+                              backgroundColor: isTask ? '#eff6ff' : '#fff0ee',
+                              borderRadius: 6,
+                              borderLeftWidth: 2.5,
+                              borderLeftColor: isTask ? '#3b82f6' : '#e87a6e',
+                              paddingHorizontal: 5, paddingTop: 3,
+                              zIndex: 10, overflow: 'hidden',
+                            }}
+                          >
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: isTask ? '#3b82f6' : '#e87a6e' }} numberOfLines={1}>
+                              {ev.title || 'Busy'}
+                            </Text>
+                          </View>
+                        );
+                    };
+
+                    const durationMins = (clampedEnd.getTime() - clampedStart.getTime()) / 60000;
+                    if (Math.round(durationMins) >= 1440) {
+                        return renderBox(0, 1440, 'fullday');
+                    }
+
+                    const today8AM = new Date(dayStart);
+                    today8AM.setHours(8, 0, 0, 0);
+
+                    // If event physically crosses the 8 AM boundary (e.g. 7 AM to 9 AM), we must visually split it
+                    if (clampedStart < today8AM && clampedEnd > today8AM) {
+                        const vStart1 = getVisualMins(clampedStart);
+                        const vEnd1 = 1440; // Reaches visual bottom
+                        
+                        const vStart2 = 0; // Restarts at visual top
+                        const vEnd2 = getVisualMins(clampedEnd);
+                        
+                        return (
+                            <React.Fragment key={blockIdx}>
+                                {renderBox(vStart1, vEnd1, 'part1')}
+                                {renderBox(vStart2, vEnd2, 'part2')}
+                            </React.Fragment>
+                        );
+                    } else {
+                        // Standalone contiguous block
+                        const vStart = getVisualMins(clampedStart);
+                        let vEnd = getVisualMins(clampedEnd);
+                        
+                        // If it ends exactly at 8 AM, it's extending to the visual bottom of the list
+                        if (clampedEnd.getTime() === today8AM.getTime()) {
+                            vEnd = 1440;
+                        }
+                        
+                        return renderBox(vStart, vEnd, 'full');
+                    }
                   })}
                 </View>
               ))}
@@ -377,10 +410,14 @@ export default function AvailabilityScreen() {
 
       <AddEventModal
         visible={showAddEvent}
-        onClose={() => setShowAddEvent(false)}
-        initialGroupId={groupId}
-        prefilledStartTime={prefilledTime?.start}
-        prefilledEndTime={prefilledTime?.end}
+        onClose={() => {
+            setShowAddEvent(false);
+            setPrefilledTime(null);
+        }}
+        initialGroupId={groupId as string}
+        initialDate={selectedDate}
+        prefilledStart={prefilledTime?.start}
+        prefilledEnd={prefilledTime?.end}
       />
     </View>
   );

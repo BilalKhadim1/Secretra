@@ -93,7 +93,7 @@ const Icon = {
   ),
 };
 
-const AVATARS = ['🐼', '🦊', '🐬', '🦁', '🐸', '🦄', '🐙', '🦋', '🐺', '🦅', '🐲', '🌙'];
+const AVATARS = ['🧑', '👨', '👩', '🧔', '👱', '👨‍🦰', '👩‍🦰', '👨‍🦱', '👩‍🦱', '👨‍🦳', '👩‍🦳', '😎'];
 
 // ── Shared sheet helpers ──
 const renderBackdrop = (props: any) => (
@@ -319,7 +319,7 @@ function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <SheetLabel>Pick an emoji</SheetLabel>
+          <SheetLabel>Select an icon</SheetLabel>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
             {AVATARS.map((emoji) => (
               <TouchableOpacity

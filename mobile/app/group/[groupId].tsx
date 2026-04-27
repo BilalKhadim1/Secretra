@@ -452,8 +452,14 @@ export default function GroupDetailPage() {
   const currentUser = currentUserQuery.data;
   const isAdmin = group?.userId === currentUser?.id;
 
+  const [todayBounds] = useState(() => {
+    const s = new Date(); s.setHours(0,0,0,0);
+    const e = new Date(); e.setHours(23,59,59,999);
+    return { startDate: s.toISOString(), endDate: e.toISOString() };
+  });
+
   const getTeamMemberCalendar = trpc.calendar.getTeamMemberCalendar.useQuery(
-    { memberId: selectedMember?.user?.id || selectedMember?.userId || '', groupId },
+    { memberId: selectedMember?.user?.id || selectedMember?.userId || '', groupId, ...todayBounds },
     { enabled: !!selectedMember && !!groupId }
   );
 

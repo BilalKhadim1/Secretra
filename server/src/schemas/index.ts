@@ -6,7 +6,7 @@ export const idParam = z.object({ id: z.string().uuid() });
 export const groupIdParam = z.object({ groupId: z.string().uuid() });
 
 // ─── Calendar / Event Schemas ────────────────────────────────────────
-export const eventInputSchema = z.object({
+const baseEventSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   location: z.string().optional(),
@@ -21,11 +21,24 @@ export const eventInputSchema = z.object({
   isAllDay: z.boolean().optional().default(false),
 });
 
-export const eventUpdateSchema = eventInputSchema.extend({
+export const eventInputSchema = baseEventSchema.refine(data => new Date(data.startAt) <= new Date(data.endAt), {
+  message: "End time must be after start time",
+  path: ["endAt"],
+});
+
+export const eventUpdateSchema = baseEventSchema.extend({
   id: z.string().uuid(),
   title: z.string().optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
+}).refine(data => {
+  if (data.startAt && data.endAt) {
+    return new Date(data.startAt) <= new Date(data.endAt);
+  }
+  return true;
+}, {
+  message: "End time must be after start time",
+  path: ["endAt"],
 });
 
 export const eventFilterSchema = z.object({
@@ -61,6 +74,14 @@ export const taskInputSchema = z.object({
   startDate: z.string().datetime().optional(),
   dueDate: z.string().datetime().optional(),
   reminderMinutes: z.number().int().nullable().optional(),
+}).refine(data => {
+  if (data.startDate && data.dueDate) {
+    return new Date(data.startDate) <= new Date(data.dueDate);
+  }
+  return true;
+}, {
+  message: "Due date must be after start date",
+  path: ["dueDate"],
 });
 
 export const taskUpdateSchema = z.object({
@@ -73,6 +94,14 @@ export const taskUpdateSchema = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   sortOrder: z.string().optional(),
   reminderMinutes: z.number().int().nullable().optional(),
+}).refine(data => {
+  if (data.startDate && data.dueDate && data.startDate !== null && data.dueDate !== null) {
+    return new Date(data.startDate) <= new Date(data.dueDate);
+  }
+  return true;
+}, {
+  message: "Due date must be after start date",
+  path: ["dueDate"],
 });
 
 // ─── Note Schemas ────────────────────────────────────────────────────

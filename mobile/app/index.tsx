@@ -1,13 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Dimensions,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Dimensions, ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -64,7 +57,7 @@ export default function LoginScreen() {
       setIsGoogleLoading(true);
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
-      
+
       const idToken = response.data?.idToken;
       if (idToken) {
         googleLoginMutation.mutate({ idToken });
@@ -125,7 +118,7 @@ export default function LoginScreen() {
       <StatusBar style="light" />
 
       {/* Main Coral Header Background */}
-      <View 
+      <View
         className="justify-center px-7 bg-coral"
         style={{ height: HEADER_HEIGHT }}
       >
@@ -139,7 +132,7 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1 -mt-8 z-10"
       >
-        <ScrollView 
+        <ScrollView
           className="flex-1 bg-white rounded-t-[40px]"
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
@@ -202,9 +195,9 @@ export default function LoginScreen() {
             </View>
 
             <View className="mt-4">
-              <TouchableOpacity 
+              <TouchableOpacity
                 className={`bg-coral h-[54px] rounded-[27px] flex-row items-center justify-center mb-8 ${loginMutation.isPending ? 'opacity-70' : ''}`}
-                activeOpacity={0.85} 
+                activeOpacity={0.85}
                 onPress={handleLogin}
                 disabled={loginMutation.isPending}
                 style={{ boxShadow: '0 4px 16px rgba(232, 122, 110, 0.3)' }}
@@ -226,18 +219,18 @@ export default function LoginScreen() {
               </View>
 
               <View className="flex-row justify-center gap-5 mb-8">
-                <TouchableOpacity 
-                  className="w-[54px] h-[54px] rounded-[27px] border-[1.5px] border-[#f1f5f9] items-center justify-center bg-white shadow-sm" 
-                  activeOpacity={0.85} 
+                <TouchableOpacity
+                  className="w-[54px] h-[54px] rounded-[27px] border-[1.5px] border-[#f1f5f9] items-center justify-center bg-white shadow-sm"
+                  activeOpacity={0.85}
                   onPress={handleGoogleLogin}
                   style={{ boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)' }}
                 >
                   <FontAwesome6 name="google" size={24} color="#DB4437" />
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  className="w-[54px] h-[54px] rounded-[27px] bg-black items-center justify-center overflow-hidden" 
-                  activeOpacity={0.85} 
+                <TouchableOpacity
+                  className="w-[54px] h-[54px] rounded-[27px] bg-black items-center justify-center overflow-hidden"
+                  activeOpacity={0.85}
                   onPress={handleAppleLogin}
                 >
                   <Ionicons name="logo-apple" size={26} color="white" />

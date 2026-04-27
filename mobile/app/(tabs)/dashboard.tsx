@@ -378,7 +378,13 @@ export default function DashboardScreen() {
             return (
               <TouchableOpacity
                 activeOpacity={0.88}
-                onPress={() => router.push(isMeeting ? '/(tabs)/calendar' : '/(tabs)/tasks')}
+                onPress={() => {
+                  if (isMeeting) {
+                    router.push({ pathname: '/(tabs)/calendar', params: { date: nextItem.startAt } });
+                  } else {
+                    router.push('/(tabs)/tasks');
+                  }
+                }}
                 style={S.meetingCard}
               >
                 <View style={{ flex: 1 }}>

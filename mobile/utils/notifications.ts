@@ -160,3 +160,29 @@ Notifications.setNotificationHandler({
     shouldShowList: true,
   }),
 });
+
+export async function cancelEventReminder(eventId: string) {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notif of scheduled) {
+      if (notif.content?.data?.eventId === eventId) {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to cancel event reminder:', e);
+  }
+}
+
+export async function cancelTaskReminder(taskId: string) {
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notif of scheduled) {
+      if (notif.content?.data?.taskId === taskId) {
+        await Notifications.cancelScheduledNotificationAsync(notif.identifier);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to cancel task reminder:', e);
+  }
+}
