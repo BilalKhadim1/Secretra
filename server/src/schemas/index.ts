@@ -31,6 +31,7 @@ export const eventUpdateSchema = baseEventSchema.extend({
   title: z.string().optional(),
   startAt: z.string().datetime().optional(),
   endAt: z.string().datetime().optional(),
+  googleEventId: z.string().optional(),
 }).refine(data => {
   if (data.startAt && data.endAt) {
     return new Date(data.startAt) <= new Date(data.endAt);
@@ -58,6 +59,13 @@ export const teamAvailabilitySchema = z.object({
   groupId: z.string().uuid(),
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
+});
+
+export const dashboardOverviewSchema = z.object({
+  todayCount: z.number(),
+  notesCount: z.number(),
+  nextEvent: z.any().nullable(),
+  nextTask: z.any().nullable(),
 });
 
 // ─── Task Schemas ────────────────────────────────────────────────────

@@ -57,6 +57,7 @@ const IconChevron = ({ color = '#9ca3af', size = 16 }) => (
     <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
+
 const IconFileText = ({ color = '#64748b', size = 16 }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -108,9 +109,18 @@ export default function DashboardScreen() {
       groupsQuery.refetch();
     },
   });
+  const joinEventMutation = trpc.calendar.joinEvent.useMutation({
+    onSuccess: () => overviewQuery.refetch(),
+  });
 
   const [groupName, setGroupName] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const isLoading = overviewQuery.isLoading || groupsQuery.isLoading || activityQuery.isLoading || isUserLoading || isTasksLoading;
   const overview = overviewQuery.data;
@@ -153,6 +163,116 @@ export default function DashboardScreen() {
     groupDescription: inv.group?.description,
   }));
 
+  // ── Meeting card renderer ──────────────────────────────────────────────────
+  const renderMeetingCard = () => {
+    const ev = overview?.nextEvent;
+    const tk = overview?.nextTask;
+
+    let nextItem: any = null;
+    let type: 'meeting' | 'task' = 'meeting';
+
+    if (ev && tk) {
+      if (new Date(ev.startAt) <= new Date(tk.startDate)) {
+        nextItem = ev; type = 'meeting';
+      } else {
+        nextItem = tk; type = 'task';
+      }
+    } else if (ev) {
+      nextItem = ev; type = 'meeting';
+    } else if (tk) {
+      nextItem = tk; type = 'task';
+    }
+
+    if (!nextItem) {
+      return (
+        <View style={S.meetingEmpty}>
+          <View style={S.meetingEmptyIcon}>
+            <IconCalendar color="#94a3b8" size={18} />
+          </View>
+          <View>
+            <Text style={S.meetingEmptyTitle}>No upcoming plans</Text>
+            <Text style={S.meetingEmptyMeta}>You're free — or schedule something new.</Text>
+          </View>
+        </View>
+      );
+    }
+
+    const isMeeting = type === 'meeting';
+    const isActive = isMeeting
+      && new Date(nextItem.startAt) <= currentTime
+      && new Date(nextItem.endAt) > currentTime;
+    const hasJoined = isMeeting && nextItem.attendances?.length > 0;
+
+    // Determine label & icon state
+    let tagLabel = `NEXT ${isMeeting ? 'MEETING' : 'TASK'}`;
+    if (isActive) tagLabel = 'LIVE NOW';
+
+    const iconBg = hasJoined && isActive
+      ? 'rgba(255,255,255,0.25)'
+      : 'rgba(255,255,255,0.15)';
+
+    const iconContent = isMeeting
+      ? (hasJoined ? <IconCheck color="white" size={18} /> : <IconUsers color="white" size={18} />)
+      : <IconCheck color="white" size={18} />;
+
+    return (
+      <View style={S.meetingCard}>
+        {/* Live indicator dot — only shown when active */}
+
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => {
+            const dateVal = nextItem.startAt || nextItem.startDate || nextItem.dueDate;
+            if (dateVal) {
+              router.push({ pathname: '/(tabs)/calendar', params: { date: dateVal } });
+            } else {
+              router.push('/(tabs)/tasks');
+            }
+          }}
+          style={{ flex: 1 }}
+        >
+          <Text style={S.meetingTag}>{tagLabel}</Text>
+          <Text style={S.meetingTitle} numberOfLines={1}>{nextItem.title}</Text>
+          <Text style={S.meetingMeta}>
+            {isMeeting && nextItem.group?.name ? `${nextItem.group.name} · ` : ''}
+            {isMeeting
+              ? `${formatTime(nextItem.startAt)} – ${formatTime(nextItem.endAt)}`
+              : (nextItem.startDate
+                ? `Starts ${formatTime(nextItem.startDate)}`
+                : nextItem.dueDate
+                  ? `Due ${formatTime(nextItem.dueDate)}`
+                  : 'No time set')
+            }
+          </Text>
+
+          {/* In-meeting status line */}
+          {hasJoined && isActive && (
+            <View style={S.joinedRow}>
+              <View style={S.joinedDot} />
+              <Text style={S.joinedText}>You're in this meeting</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Right action button */}
+        {isActive && !hasJoined ? (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            disabled={joinEventMutation.isPending}
+            onPress={() => joinEventMutation.mutate({ eventId: nextItem.id })}
+            style={S.joinNowBtn}
+          >
+            {joinEventMutation.isPending
+              ? <ActivityIndicator size="small" color="#e87a6e" />
+              : <Text style={S.joinNowText}>Join Now</Text>}
+          </TouchableOpacity>
+        ) : (
+          <View style={S.meetingIconBtn}>{iconContent}</View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f5f3' }}>
       <StatusBar barStyle="light-content" backgroundColor={DARK} />
@@ -163,8 +283,8 @@ export default function DashboardScreen() {
         index={0}
         snapPoints={snapPoints}
         enablePanDownToClose
-        enableDynamicSizing={false}   // ← add this
-        topInset={0}                  // ← add this
+        enableDynamicSizing={false}
+        topInset={0}
         backdropComponent={renderBackdrop}
         handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.2)', width: 40, height: 4 }}
         backgroundStyle={{ backgroundColor: '#16161f' }}
@@ -190,13 +310,10 @@ export default function DashboardScreen() {
               {mappedInvites.map((invite) => {
                 const isAccepting = acceptInviteMutation.isPending && acceptInviteMutation.variables?.groupId === invite.groupId;
                 const isRejecting = rejectInviteMutation.isPending && rejectInviteMutation.variables?.groupId === invite.groupId;
-
                 return (
                   <View key={invite.groupId} style={M.inviteCard}>
                     <Text style={M.inviteName}>{invite.groupName}</Text>
-                    {invite.groupDescription && (
-                      <Text style={M.inviteDesc}>{invite.groupDescription}</Text>
-                    )}
+                    {invite.groupDescription && <Text style={M.inviteDesc}>{invite.groupDescription}</Text>}
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                       <TouchableOpacity
                         onPress={() => rejectInviteMutation.mutate({ groupId: invite.groupId })}
@@ -288,7 +405,6 @@ export default function DashboardScreen() {
       >
         {/* ── Hero ── */}
         <View style={S.hero}>
-          {/* Greeting row */}
           <View style={S.heroRow}>
             <View>
               <Text style={S.greeting}>{getGreeting()}</Text>
@@ -306,7 +422,6 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Date + tasks pill row */}
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
             <View style={S.pill}>
               <View style={S.pillDot} />
@@ -317,7 +432,6 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* ── Stat row — inline, compact ── */}
           <View style={S.statsRow}>
             {STATS.map((s, i) => (
               <React.Fragment key={s.label}>
@@ -339,77 +453,7 @@ export default function DashboardScreen() {
         {/* ── Body ── */}
         <View style={S.body}>
 
-          {/* ── Next Upcoming (Meeting or Task) card ── */}
-          {(() => {
-            const ev = overview?.nextEvent;
-            const tk = overview?.nextTask;
-
-            // Determine which one is next
-            let nextItem: any = null;
-            let type: 'meeting' | 'task' = 'meeting';
-
-            if (ev && tk) {
-              if (new Date(ev.startAt) <= new Date(tk.startDate)) {
-                nextItem = ev; type = 'meeting';
-              } else {
-                nextItem = tk; type = 'task';
-              }
-            } else if (ev) {
-              nextItem = ev; type = 'meeting';
-            } else if (tk) {
-              nextItem = tk; type = 'task';
-            }
-
-            if (!nextItem) {
-              return (
-                <View style={S.meetingEmpty}>
-                  <View style={S.meetingEmptyIcon}>
-                    <IconCalendar color="#94a3b8" size={18} />
-                  </View>
-                  <View>
-                    <Text style={S.meetingEmptyTitle}>No upcoming plans</Text>
-                    <Text style={S.meetingEmptyMeta}>You're free — or schedule something new.</Text>
-                  </View>
-                </View>
-              );
-            }
-
-            const isMeeting = type === 'meeting';
-            return (
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={() => {
-                  if (isMeeting) {
-                    router.push({ pathname: '/(tabs)/calendar', params: { date: nextItem.startAt } });
-                  } else {
-                    router.push('/(tabs)/tasks');
-                  }
-                }}
-                style={S.meetingCard}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={S.meetingTag}>NEXT {isMeeting ? 'MEETING' : 'TASK'}</Text>
-                  <Text style={S.meetingTitle} numberOfLines={1}>{nextItem.title}</Text>
-                  <Text style={S.meetingMeta}>
-                    {isMeeting && nextItem.group?.name ? `${nextItem.group.name} · ` : ''}
-                    {isMeeting ? (
-                      `${formatTime(nextItem.startAt)} – ${formatTime(nextItem.endAt)}`
-                    ) : (
-                      <Text>
-                        {nextItem.startDate && `Starts ${formatTime(nextItem.startDate)}`}
-                        {nextItem.startDate && nextItem.dueDate && ' · '}
-                        {nextItem.dueDate && `Due ${formatTime(nextItem.dueDate)}`}
-                        {!nextItem.startDate && !nextItem.dueDate && 'No time set'}
-                      </Text>
-                    )}
-                  </Text>
-                </View>
-                <View style={S.meetingIcon}>
-                  {isMeeting ? <IconUsers color="white" size={18} /> : <IconCheck color="white" size={18} />}
-                </View>
-              </TouchableOpacity>
-            );
-          })()}
+          {renderMeetingCard()}
 
           {/* ── Departments ── */}
           <View style={S.sectionHeader}>
@@ -476,7 +520,6 @@ export default function DashboardScreen() {
                 const Icon = item.type === 'note' ? IconFileText : (item.type === 'event' ? IconUsers : IconCheck);
                 const bg = item.type === 'note' ? '#f0fdf4' : (item.type === 'event' ? '#eff6ff' : '#f5f3ff');
                 const iconColor = item.type === 'note' ? '#16a34a' : (item.type === 'event' ? '#2563eb' : '#7c3aed');
-
                 return (
                   <TouchableOpacity
                     key={item.id}
@@ -578,14 +621,59 @@ const S = {
     backgroundColor: '#f6f5f3', borderTopLeftRadius: 28, borderTopRightRadius: 28,
     paddingHorizontal: 16, paddingTop: 24, paddingBottom: 110, marginTop: -20,
   },
+
+  // ── Meeting card — unified across all states ──
   meetingCard: {
-    backgroundColor: '#e87a6e', borderRadius: 18, padding: 16,
-    flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 20, gap: 12,
+    backgroundColor: '#e87a6e',
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginBottom: 20,
+    gap: 12,
   },
-  meetingTag: { color: 'rgba(255,255,255,0.65)', fontSize: 9, fontWeight: '800' as const, letterSpacing: 1.2, marginBottom: 5 },
+  meetingTag: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 9,
+    fontWeight: '800' as const,
+    letterSpacing: 1.2,
+    marginBottom: 5,
+  },
   meetingTitle: { color: '#fff', fontSize: 16, fontWeight: '800' as const, marginBottom: 4, letterSpacing: -0.3 },
   meetingMeta: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' as const },
-  meetingIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
+
+  // Subtle "joined" line below meta — replaces the clunky green banner
+  joinedRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, marginTop: 8 },
+  joinedDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.9)' },
+  joinedText: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '600' as const },
+
+  // Icon button — default state (next meeting / task / joined)
+  meetingIconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+
+  // "Join Now" pill — shown only when live & not joined
+  joinNowBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    minWidth: 82,
+  },
+  joinNowText: {
+    color: '#e87a6e',
+    fontSize: 13,
+    fontWeight: '800' as const,
+    letterSpacing: 0.2,
+  },
+
   meetingEmpty: {
     backgroundColor: '#fff', borderRadius: 18, padding: 14,
     flexDirection: 'row' as const, alignItems: 'center' as const,
@@ -594,6 +682,7 @@ const S = {
   meetingEmptyIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: '#f8fafc', alignItems: 'center' as const, justifyContent: 'center' as const },
   meetingEmptyTitle: { color: '#374151', fontSize: 13, fontWeight: '700' as const },
   meetingEmptyMeta: { color: '#9ca3af', fontSize: 12, marginTop: 2 },
+
   sectionHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, marginBottom: 10 },
   sectionLabel: { fontSize: 11, fontWeight: '700' as const, color: '#9ca3af', letterSpacing: 1 },
   newBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#e0f2fe', paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8 },

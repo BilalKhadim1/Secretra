@@ -9,7 +9,7 @@ import {
   RefreshControl,
   TextInput,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -58,10 +58,9 @@ function isToday(date: Date) {
 // ── Day scroller ──
 function DayScroller({ selected, onSelect }: { selected: Date; onSelect: (d: Date) => void }) {
   const scrollRef = useRef<ScrollView>(null);
-  const today = new Date();
   const days: Date[] = [];
-  const start = new Date(today);
-  start.setDate(today.getDate() - 3);
+  const start = new Date(selected);
+  start.setDate(selected.getDate() - 3);
   for (let i = 0; i < 21; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -222,13 +221,24 @@ function EventItem({
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState(new Date());
   
+  // Sync URL date -> State
   React.useEffect(() => {
     if (params.date && typeof params.date === 'string') {
-      setSelectedDate(new Date(params.date));
+      const d = new Date(params.date);
+      if (!isNaN(d.getTime())) {
+        setSelectedDate(d);
+      }
     }
   }, [params.date]);
+
+  // Sync State -> URL date (so re-navigation with same date still works)
+  const handleSelectDate = (d: Date) => {
+    setSelectedDate(d);
+    router.setParams({ date: d.toISOString() });
+  };
 
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
@@ -353,7 +363,7 @@ export default function CalendarScreen() {
 
         {/* Day scroller */}
         <View style={{ paddingBottom: 14 }}>
-          <DayScroller selected={selectedDate} onSelect={setSelectedDate} />
+          <DayScroller selected={selectedDate} onSelect={handleSelectDate} />
         </View>
       </View>
 

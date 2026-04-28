@@ -127,9 +127,9 @@ export const taskRouter = router({
       await emitSignal({ userId: ctx.user.id }, 'calendar_update');
 
       // Delete from Google if exists
-      if ((deleted as any).googleEventId) {
+      if (deleted.googleEventId) {
           GoogleCalendarService.forUser(ctx.user.id).then(service => {
-              if (service) service.deleteTaskFromGoogle((deleted as any).googleEventId).catch((err: any) => console.error('Background Google task delete failed:', err));
+              if (service) service.deleteTaskFromGoogle(deleted.googleEventId!).catch((err: any) => console.error('Background Google task delete failed:', err));
           });
       }
 

@@ -83,13 +83,13 @@ export class GoogleCalendarService {
         const endAt = new Date(gEvent.end?.dateTime || gEvent.end?.date || '');
 
         // 1. Check if this is a reflection of a local Task
-        const existingTask = await (prisma.task as any).findFirst({
+        const existingTask = await prisma.task.findFirst({
             where: { googleEventId: gEvent.id }
         });
 
         if (existingTask) {
             // Update the task instead of creating an event
-            await (prisma.task as any).update({
+            await prisma.task.update({
                 where: { id: existingTask.id },
                 data: {
                     title: gEvent.summary.replace(/^\[Task\]\s*/, ''),
@@ -100,7 +100,7 @@ export class GoogleCalendarService {
             });
 
             // Cleanup: If we accidentally created an Event for this Task earlier, delete it
-            await (prisma.event as any).deleteMany({
+            await prisma.event.deleteMany({
                 where: { googleEventId: gEvent.id }
             });
 
@@ -108,7 +108,7 @@ export class GoogleCalendarService {
         }
 
         // 2. Otherwise handle as a normal Event
-        const existingEvent = await (prisma.event as any).findFirst({
+        const existingEvent = await prisma.event.findFirst({
           where: { googleEventId: gEvent.id }
         });
 
@@ -189,7 +189,7 @@ export class GoogleCalendarService {
   async pushTaskToGoogle(taskId: string) {
     const task = await prisma.task.findUnique({
         where: { id: taskId }
-    }) as any;
+    });
     if (!task || (!task.startDate && !task.dueDate)) return;
 
     const calendar = google.calendar({ version: 'v3', auth: this.oauth2Client });
@@ -199,8 +199,8 @@ export class GoogleCalendarService {
     const gBody = {
         summary: `[Task] ${task.title}`,
         description: task.description || '',
-        start: { dateTime: start.toISOString() },
-        end: { dateTime: end.toISOString() },
+        start: { dateTime: start?.toISOString() },
+        end: { dateTime: end?.toISOString() },
     };
 
     if (task.googleEventId) {
@@ -217,7 +217,7 @@ export class GoogleCalendarService {
         if (res.data.id) {
             await prisma.task.update({
                 where: { id: task.id },
-                data: { googleEventId: res.data.id } as any
+                data: { googleEventId: res.data.id }
             });
         }
     }

@@ -1,48 +1,17 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpcBase';
-import { EventPriority, EventStatus, GroupMemberStatus } from '@ps/db';
+import { GroupMemberStatus } from '@ps/db';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
 import { GoogleCalendarService } from '../services/google-calendar.service';
-
-// Explicitly define schemas to help TS inference in some IDE environments
-const eventInputSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  groupId: z.string().uuid().optional(),
-  attendeeIds: z.array(z.string().uuid()).optional(), // New field
-  eventType: z.string().default('event'),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  isAllDay: z.boolean().default(false),
-  priority: z.nativeEnum(EventPriority).default(EventPriority.medium),
-  status: z.nativeEnum(EventStatus).default(EventStatus.confirmed),
-  googleEventId: z.string().optional(),
-});
-
-const eventUpdateSchema = z.object({
-  id: z.string().uuid(),
-  groupId: z.string().uuid().optional(),
-  attendeeIds: z.array(z.string().uuid()).optional(), // New field
-  eventType: z.string().default('event'),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  startAt: z.string().datetime().optional(),
-  endAt: z.string().datetime().optional(),
-  isAllDay: z.boolean().optional(),
-  priority: z.nativeEnum(EventPriority).optional(),
-  status: z.nativeEnum(EventStatus).optional(),
-  googleEventId: z.string().optional(),
-});
-
-const dashboardOverviewSchema = z.object({
-  todayCount: z.number(),
-  notesCount: z.number(),
-  nextEvent: z.any().nullable(),
-  nextTask: z.any().nullable(),
-});
+import {
+  eventInputSchema,
+  eventUpdateSchema,
+  eventFilterSchema,
+  teamMemberCalendarSchema,
+  teamAvailabilitySchema,
+  dashboardOverviewSchema,
+} from '../schemas';
 
 export const calendarRouter = router({
   // Get dashboard overview stats
@@ -62,11 +31,15 @@ export const calendarRouter = router({
               { userId: ctx.user.id },
               { attendees: { some: { id: ctx.user.id } } },
             ],
-            startAt: { gte: now },
+            endAt: { gte: now }, // Include ongoing events
           },
           orderBy: { startAt: 'asc' },
           include: {
             group: { select: { name: true } },
+            attendances: {
+              where: { userId: ctx.user.id },
+              take: 1
+            },
           },
         }),
         prisma.task.findFirst({
@@ -77,7 +50,7 @@ export const calendarRouter = router({
             OR: [
               { startDate: { gte: now } },
               { dueDate: { gte: now } },
-              { AND: [ { startDate: { lte: now } }, { dueDate: { gte: now } } ] } // Currently active
+              { AND: [{ startDate: { lte: now } }, { dueDate: { gte: now } }] } // Currently active
             ],
           },
           orderBy: [
@@ -152,7 +125,7 @@ export const calendarRouter = router({
           type: 'task'
         })),
       ].sort((a, b) => b.time.getTime() - a.time.getTime())
-       .slice(0, 5); // Return top 5 overall
+        .slice(0, 5); // Return top 5 overall
 
       return log;
     }),
@@ -179,7 +152,7 @@ export const calendarRouter = router({
                 ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
               }
             } : {}),
-          } as any,
+          },
           orderBy: { startAt: 'asc' },
           include: {
             group: true,
@@ -197,14 +170,18 @@ export const calendarRouter = router({
             ],
             ...(input?.startDate || input?.endDate ? {
               OR: [
-                { startDate: { 
-                  ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
-                  ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
-                } },
-                { dueDate: { 
-                  ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
-                  ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
-                } }
+                {
+                  startDate: {
+                    ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+                    ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+                  }
+                },
+                {
+                  dueDate: {
+                    ...(input.startDate ? { gte: new Date(input.startDate) } : {}),
+                    ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
+                  }
+                }
               ]
             } : {}),
           },
@@ -222,7 +199,7 @@ export const calendarRouter = router({
         isRealTask: true,
       }));
 
-      return [...events, ...normalizedTasks].sort((a, b) => 
+      return [...events, ...normalizedTasks].sort((a, b) =>
         new Date(a.startAt as any).getTime() - new Date(b.startAt as any).getTime()
       );
     }),
@@ -270,7 +247,7 @@ export const calendarRouter = router({
                 ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
               }
             } : {}),
-          } as any,
+          },
           orderBy: { startAt: 'asc' },
           include: {
             group: true,
@@ -286,7 +263,7 @@ export const calendarRouter = router({
                 ...(input.endDate ? { lte: new Date(input.endDate) } : {}),
               }
             } : {}),
-          } as any,
+          },
           orderBy: { startDate: 'asc' },
         }),
       ]);
@@ -335,8 +312,8 @@ export const calendarRouter = router({
             { startAt: { lt: end } },
             { endAt: { gt: start } },
           ],
-        } as any,
-        include: { user: { select: { name: true } } } as any,
+        },
+        include: { user: { select: { name: true } } },
       });
 
       if (conflictingEvents.length > 0) {
@@ -365,7 +342,7 @@ export const calendarRouter = router({
           attendees: attendeeIds?.length
             ? { connect: attendeeIds.map((id) => ({ id })) }
             : undefined,
-        } as any,
+        },
         include: { attendees: { select: { id: true } } },
       });
 
@@ -378,7 +355,7 @@ export const calendarRouter = router({
 
       // Push to Google in background
       GoogleCalendarService.forUser(ctx.user.id).then(service => {
-          if (service) service.pushToGoogle(event.id).catch((err: any) => console.error('Background Google push failed:', err));
+        if (service) service.pushToGoogle(event.id).catch((err: any) => console.error('Background Google push failed:', err));
       });
 
       return event;
@@ -418,8 +395,8 @@ export const calendarRouter = router({
             { endAt: { gt: start } },
             { NOT: { id } },
           ],
-        } as any,
-        include: { user: { select: { name: true } } } as any,
+        },
+        include: { user: { select: { name: true } } },
       });
 
       if (conflictingEvents.length > 0) {
@@ -469,7 +446,7 @@ export const calendarRouter = router({
 
       // Push to Google
       GoogleCalendarService.forUser(ctx.user.id).then(service => {
-          if (service) (service as any).pushToGoogle(updatedEvent.id).catch((err: any) => console.error('Background Google push failed:', err));
+        if (service) service.pushToGoogle(updatedEvent.id).catch((err: any) => console.error('Background Google push failed:', err));
       });
 
       return updatedEvent;
@@ -499,9 +476,9 @@ export const calendarRouter = router({
 
       // Delete from Google if exists
       if (event.googleEventId) {
-          GoogleCalendarService.forUser(ctx.user.id).then(service => {
-              if (service) (service as any).deleteFromGoogle(event.googleEventId!).catch((err: any) => console.error('Background Google delete failed:', err));
-          });
+        GoogleCalendarService.forUser(ctx.user.id).then(service => {
+          if (service) (service as any).deleteFromGoogle(event.googleEventId!).catch((err: any) => console.error('Background Google delete failed:', err));
+        });
       }
 
       return result;
@@ -547,6 +524,7 @@ export const calendarRouter = router({
             endAt: true,
             groupId: true,
             attendees: { select: { id: true } },
+            attendances: { select: { userId: true } },
           },
         }),
         prisma.task.findMany({
@@ -556,7 +534,7 @@ export const calendarRouter = router({
             dueDate: { gt: start, not: null },
             deletedAt: null,
             status: { not: 'done' },
-          } as any,
+          },
           select: {
             userId: true,
             title: true,
@@ -568,6 +546,9 @@ export const calendarRouter = router({
 
       return members.map((member) => {
         const mId = member.user?.id || member.userId;
+        const now = new Date();
+        const tenMins = 10 * 60 * 1000;
+
         const memberEvents = events
           .filter((e: any) => e.userId === mId || e.attendees?.some((a: any) => a.id === mId))
           .map(e => ({
@@ -575,7 +556,6 @@ export const calendarRouter = router({
             type: 'event',
             start: e.startAt,
             end: e.endAt,
-            title: e.groupId === groupId ? e.title : 'Busy (Private Event)',
           }));
 
         const memberTasks = tasks
@@ -585,20 +565,89 @@ export const calendarRouter = router({
             type: 'task',
             start: t.startDate,
             end: t.dueDate,
-            title: 'Busy (Private Task)', // 🔒 Privacy: Task titles are always masked for others
           }));
 
-        const combinedConflicts = [...memberEvents, ...memberTasks].sort(
+        const allItems = [...memberEvents, ...memberTasks].sort(
           (a, b) => new Date(a.start as any).getTime() - new Date(b.start as any).getTime()
         );
+
+        // Calculate Status
+        let status: 'available' | 'busy' | 'starting_soon' | 'ending_soon' = 'available';
+
+        const currentItem = allItems.find(item =>
+          new Date(item.start as any) <= now && new Date(item.end as any) > now
+        );
+
+        if (currentItem) {
+          const timeLeft = new Date(currentItem.end as any).getTime() - now.getTime();
+          
+          if (currentItem.type === 'event') {
+            const hasJoined = (currentItem as any).attendances?.some((a: any) => a.userId === mId);
+            if (hasJoined) {
+              status = timeLeft <= tenMins ? 'ending_soon' : 'busy';
+            }
+          } else {
+            // Tasks (which don't have a join action) still show as busy when active
+            status = timeLeft <= tenMins ? 'ending_soon' : 'busy';
+          }
+        } else {
+          const nextItem = allItems.find(item => new Date(item.start as any) > now);
+          if (nextItem) {
+            const timeUntil = new Date(nextItem.start as any).getTime() - now.getTime();
+            if (timeUntil <= tenMins) {
+              status = 'starting_soon';
+            }
+          }
+        }
 
         return {
           userId: member.user?.id,
           name: member.user?.name,
           avatarUrl: member.user?.avatarUrl,
-          isBusy: combinedConflicts.length > 0,
-          conflictingEvents: combinedConflicts, // Merged array
+          isBusy: status === 'busy' || status === 'ending_soon',
+          status,
+          conflictingEvents: allItems,
         };
       });
+    }),
+
+  // Mark user as "Joined" a meeting
+  joinEvent: protectedProcedure
+    .input(z.object({ eventId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const { eventId } = input;
+
+      // Verify user is an attendee or creator
+      const event = await prisma.event.findFirst({
+        where: {
+          id: eventId,
+          OR: [
+            { userId: ctx.user.id },
+            { attendees: { some: { id: ctx.user.id } } },
+          ],
+        },
+      });
+
+      if (!event) {
+        throw new Error('Event not found or access denied');
+      }
+
+      const attendance = await prisma.eventAttendance.upsert({
+        where: {
+          eventId_userId: {
+            eventId,
+            userId: ctx.user.id,
+          },
+        },
+        create: {
+          eventId,
+          userId: ctx.user.id,
+        },
+        update: {
+          joinedAt: new Date(), // Update join time if re-joining
+        },
+      });
+
+      return attendance;
     }),
 });

@@ -468,8 +468,9 @@ export default function GroupDetailPage() {
     const d = new Date();
     d.setSeconds(0, 0);
     d.setMilliseconds(0);
-    const iso = d.toISOString();
-    return { groupId, startDate: iso, endDate: iso };
+    const start = d.toISOString();
+    const end = new Date(d.getTime() + 15 * 60 * 1000).toISOString(); // Fetch 15 mins ahead to be safe
+    return { groupId, startDate: start, endDate: end };
   }, [groupId, Math.floor(Date.now() / 60000)]); // Only changes once per minute
 
   const teamAvailabilityQuery = trpc.calendar.getTeamAvailability.useQuery(
@@ -712,16 +713,24 @@ export default function GroupDetailPage() {
                 >
                   <View style={{ position: 'relative' }}>
                     <AvatarInitials email={m.email} size={40} />
-                    {teamAvailability.find(s => s.userId === m.userId)?.isBusy && (
-                      <View 
-                        style={{ 
-                          position: 'absolute', bottom: -1, right: -1, 
-                          width: 13, height: 13, borderRadius: 7, 
-                          backgroundColor: '#ef4444', 
-                          borderWidth: 2, borderColor: 'white' 
-                        }} 
-                      />
-                    )}
+                    <View 
+                      style={{ 
+                        position: 'absolute', bottom: -1, right: -1, 
+                        width: 14, height: 14, borderRadius: 7, 
+                        backgroundColor: (function() {
+                          const s = teamAvailability.find(a => a.userId === m.userId)?.status;
+                          if (s === 'busy' || s === 'ending_soon') return '#ef4444';
+                          if (s === 'starting_soon') return '#f59e0b';
+                          return '#22c55e';
+                        })(),
+                        borderWidth: 2, borderColor: 'white',
+                        alignItems: 'center', justifyContent: 'center'
+                      }} 
+                    >
+                      {teamAvailability.find(a => a.userId === m.userId)?.status === 'ending_soon' && (
+                        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'white' }} />
+                      )}
+                    </View>
                   </View>
 
                   <View style={{ flex: 1, marginLeft: 13 }}>
@@ -737,11 +746,24 @@ export default function GroupDetailPage() {
                       {!isMemberCreator && (
                         <Text style={{ fontSize: 12, color: MUTED }}>Member</Text>
                       )}
-                      {teamAvailability.find(s => s.userId === m.userId)?.isBusy && (
-                        <View style={{ backgroundColor: '#fef2f2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444', letterSpacing: 0.4 }}>BUSY</Text>
-                        </View>
-                      )}
+                      {(function() {
+                        const s = teamAvailability.find(a => a.userId === m.userId)?.status;
+                        if (s === 'starting_soon') {
+                          return (
+                            <View style={{ backgroundColor: '#fff7ed', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#ffedd5' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#f59e0b', letterSpacing: 0.4 }}>STARTING SOON</Text>
+                            </View>
+                          );
+                        }
+                        if (s === 'ending_soon') {
+                          return (
+                            <View style={{ backgroundColor: '#fef2f2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#fee2e2' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444', letterSpacing: 0.4 }}>ENDING SOON</Text>
+                            </View>
+                          );
+                        }
+                        return null;
+                      })()}
                     </View>
                   </View>
 

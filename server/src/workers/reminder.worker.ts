@@ -1,12 +1,7 @@
 import { Worker } from 'bullmq';
-import IORedis from 'ioredis';
 import { ReminderJobData } from '../queue/reminder.queue';
-
-const connection = new IORedis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
-  maxRetriesPerRequest: null,
-});
+import { redisConnection } from '../queue/connection';
+import prisma from '../shared/prisma';
 
 export const reminderWorker = new Worker<ReminderJobData>(
   'reminders',
@@ -15,10 +10,25 @@ export const reminderWorker = new Worker<ReminderJobData>(
     
     console.log(`🔔 NOTIFICATION for User ${userId}: ${type.toUpperCase()} - "${title}" is starting soon!`);
     
-    // TODO: Integrate with actual notification service (Email/SMS/Push)
-    // For now, we log to stdout as professional proof of background processing.
+    // Fetch push tokens for the user
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userId }
+    });
+
+    if (subscriptions.length === 0) {
+      console.log(`⚠️ No push subscriptions found for user ${userId}. skipping push.`);
+      return;
+    }
+
+    console.log(`📱 Sending push to ${subscriptions.length} devices for user ${userId}...`);
+    
+    // TODO: Send to FCM via firebase-admin or direct HTTP
+    // For now, we log the tokens we would send to as proof of wiring.
+    for (const sub of subscriptions) {
+      console.log(`   -> Target: ${sub.platform} (${sub.endpoint.slice(0, 10)}...)`);
+    }
   },
-  { connection }
+  { connection: redisConnection }
 );
 
 reminderWorker.on('completed', (job) => {

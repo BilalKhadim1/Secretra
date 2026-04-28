@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { router, protectedProcedure } from '../trpcBase';
 import prisma from '../shared/prisma';
 import { emitSignal } from '../socket';
@@ -35,7 +34,6 @@ export const noteRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { title, content, plainText, contactId, tags, folder, isPinned, isArchived } = input;
       try {
-        // @ts-ignore - Bypass IDE TS cache for new Prisma schema fields
         const result = await prisma.note.create({
           data: {
             title,
